@@ -33,6 +33,16 @@ def create_rgb(sens, hsi):
     return torch.matmul(sens.transpose(-1, -2), hsi.view(b, c, -1)).view(b, c, h, w)
 
     
+def construct(blocks, N):
+    blocks = torch.cat(torch.chunk(blocks, N, dim=1), dim=-1)
+    return torch.cat(torch.unbind(blocks, dim=1), dim=-2)
+
+
+def deconstruct(x, N):
+    blocks = torch.stack(torch.chunk(rgb, N, dim=-2), dim=1)
+    return torch.cat(torch.chunk(blocks, N, dim=-1), dim=1)
+
+
 # These functions below are adapted from 
 # https://github.com/berk95kaya/Spectral-Estimation/blob/3c634de1ba196e3429e299c25bfee35f440c7e27/functions.py
 def create_sensitivity(sens_type, idx=None):

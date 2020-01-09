@@ -4,16 +4,14 @@ from types import MappingProxyType
 from copy import deepcopy
 
 import torch
-from skimage import io, img_as_ubyte
-from skimage.segmentation import mark_boundaries
-from skimage.segmentation._slic import _enforce_label_connectivity_cython as enforce_connectivity
+from skimage import io
 from tqdm import tqdm
 
 import constants
 from utils.data_utils import to_array
 from utils.misc import R
 from utils.metrics import AverageMeter
-from utils.utils import create_sensitivity, create_rgb
+from utils.utils import (create_sensitivity, create_rgb, construct, deconstruct)
 from .factories import (model_factory, optim_factory, critn_factory, data_factory, metric_factory)
 
 
@@ -307,6 +305,10 @@ class EstimatorTrainer(Trainer):
                 pb.set_description(desc)
                 self.logger.dump(desc)
 
+                if store:
+                    self.save_image(self.gpc.add_suffix(name[0], suffix='pred', underline=True), img_pred, epoch)
+                    self.save_image(self.gpc.add_suffix(name[0], suffix='real', underline=True), img_real, epoch)
+
         return self.metrics[0].avg if len(self.metrics) > 0 else max(1.0 - losses.avg, self._init_max_acc)
 
     @staticmethod
@@ -397,6 +399,10 @@ class ClassifierTrainer(Trainer):
                 pb.set_description(desc)
                 self.logger.dump(desc)
 
+                if store:
+                    self.save_image(self.gpc.add_suffix(name[0], suffix='pred', underline=True), img_pred, epoch)
+                    self.save_image(self.gpc.add_suffix(name[0], suffix='real', underline=True), img_real, epoch)
+
         return self.metrics[0].avg if len(self.metrics) > 0 else max(1.0 - losses.avg, self._init_max_acc)
 
     @staticmethod
@@ -432,17 +438,17 @@ class SolverTrainer(Trainer):
             else:
                 sens = create_sensitivity('C').to(self.device)
 
-            # Create a RGB image for training
+            # Create a RGB image as training input
             rgb = create_rgb(sens, hsi)
 
             if self.with_sens:
                 rgb = torch.cat([rgb, sens.view(1,-1, 1, 1).repeat(rgb.size(0),1,*rgb.shape[2:])], dim=1)
 
             recon = self.model(rgb)
-            # Discard the boundary pixels of rgb
-            rgb = rgb[...,self.cut:-self.cut, self.cut:-self.cut]
+            # Discard the boundary pixels of hsi
+            hsi = hsi[...,self.cut:-self.cut, self.cut:-self.cut]
 
-            loss = self.criterion(recon, rgb)
+            loss = self.criterion(recon, hsi)
             losses.update(loss.item(), n=self.batch_size)
 
             # Compute gradients and do SGD step
@@ -483,24 +489,22 @@ class SolverTrainer(Trainer):
                 if self.chop:
                     # Memory-efficient forward
                     N = 2
-                    blocks = torch.stack(torch.chunk(rgb, N, dim=-2), dim=1)
-                    blocks = torch.cat(torch.chunk(blocks, N, dim=-1), dim=1)
+                    blocks = deconstruct(rgb, N)
                     recons = torch.stack([self.model(blocks[:,i]) for i in range(N*N)], dim=1)
-                    recon = torch.cat(torch.chunk(recons, N, dim=1), dim=-1)
-                    recon = torch.cat(torch.unbind(recon, dim=1), dim=-2)
+                    recon = construct(recons, N)
 
+                    blocks = deconstruct(hsi, N)
                     blocks = blocks[...,self.cut:-self.cut, self.cut:-self.cut]
-                    blocks = torch.cat(torch.chunk(blocks, N, dim=1), dim=-1)
-                    rgb = torch.cat(torch.unbind(blocks, dim=1), dim=-2)
+                    hsi = construct(blocks, N)
                 else:
                     recon = self.model(rgb)
-                    rgb = rgb[...,self.cut:-self.cut, self.cut:-self.cut]
+                    hsi = hsi[...,self.cut:-self.cut, self.cut:-self.cut]
 
-                loss = self.criterion(recon, rgb)
+                loss = self.criterion(recon, hsi)
                 losses.update(loss.item(), n=self.batch_size)
 
                 img_pred = to_array(recon[0]).astype('uint8')
-                img_real = to_array(rgb[0]).astype('uint8')
+                img_real = to_array(hsi[0]).astype('uint8')
 
                 for m in self.metrics:
                     m.update(img_pred, img_real)

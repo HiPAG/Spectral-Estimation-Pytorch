@@ -1,5 +1,5 @@
 ### TODO
-- [ ] Models
+- [x] Models
 - [x] Trainers
 - [ ] Datasets
 - [x] Other adaptors and interfaces

@@ -293,7 +293,7 @@ class ColorJitter(_ValueTransform):
         else:
             if _istuple(shift):
                 if len(shift) != _nc:
-                    raise ValueError("specify the shift value (or range) for every channel")
+                    raise ValueError("please specify the shift value (or range) for every channel.")
                 rs = all(_istuple(s) for s in shift)
                 self.shift = self.range = shift
             else:
@@ -458,7 +458,7 @@ class _AddNoise(_ValueTransform):
     def __call__(self, *args):
         shape = args[0].shape
         if any(im.shape != shape for im in args):
-            raise ValueError("the input images should be of same size")
+            raise ValueError("the input images should be of same size.")
         self._im_shape = shape
         return super().__call__(*args)
         

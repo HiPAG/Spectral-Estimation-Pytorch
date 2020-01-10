@@ -8,10 +8,11 @@ __ENTRANCE__ = 'Estimator'
 
 
 class Estimator(nn.Module):
-    def __init__(n_in, n_out):
+    def __init__(self, n_in, n_out):
         super().__init__()
 
         assert n_out % n_in == 0
+        self.out_shape = (n_out//n_in, n_in)
 
         self.conv1 = SameConv5x5(n_in, 16, act=True)
         self.conv2 = SameConv5x5(16, 32, act=True)
@@ -58,4 +59,6 @@ class Estimator(nn.Module):
         x = self.conv11(x)
         y = self.conv12(x)
 
-        return y.view(y.size(0), n_out//n_in, n_in)
+        c = y.size(1)
+        y = y.mean(0).view(c, -1).mean(-1)
+        return y.view(*self.out_shape)

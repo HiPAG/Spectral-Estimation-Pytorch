@@ -257,7 +257,7 @@ class _Tree:
 
     def add_node(self, path, val=None):
         if not path.strip():
-            raise ValueError("the path is null")
+            raise ValueError("the path is null.")
         if val is None:
             val = self._def_val
         names = self.parse_path(path)

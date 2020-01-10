@@ -16,9 +16,13 @@ class SEDataset(data.Dataset):
         repeats
     ):
         super().__init__()
+        self.root = expanduser(root)
+        self.phase = str(phase)
+        self.transforms = transforms
+        self.repeats = int(repeats)
         # Get additional arguments from the outer stack frame
         outer_namespace = {k:v for k, v in currentframe().f_back.f_locals.items() if k not in locals()}
-        self._set_attributes({**outer_namespace, **locals()})
+        self._set_attributes({**outer_namespace, **locals()})   # Hook
         self.rgb_list, self.hsi_list = self._read_file_paths()
         self.len = len(self.rgb_list)
 
@@ -39,10 +43,7 @@ class SEDataset(data.Dataset):
             return basename(self.rgb_list[index]), rgb, hsi
 
     def _set_attributes(self, ctx):
-        self.root = expanduser(ctx['root'])
-        self.phase = ctx['phase']
-        self.transforms = ctx['transforms']
-        self.repeats = ctx['repeats']
+        pass
 
     def _read_file_paths(self):
         raise NotImplementedError

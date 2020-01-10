@@ -8,7 +8,7 @@ __ENTRANCE__ = 'Classifier'
 
 
 class Classifier(nn.Module):
-    def __init__(n_in, n_out):
+    def __init__(self, n_in, n_out):
         super().__init__()
 
         self.conv1 = SameConv5x5(n_in, 256, act=True)
@@ -23,7 +23,7 @@ class Classifier(nn.Module):
         self.conv4 = SameConv3x3(64, n_out)
         self.pool4 = MaxPool2x2()
 
-        self.act_out = nn.LogSoftmax()
+        self.act_out = nn.LogSoftmax(dim=0)
 
     def forward(self, x):
         x = self.conv1(x)
@@ -38,4 +38,4 @@ class Classifier(nn.Module):
         x = self.conv4(x)
         y = self.pool4(x)
 
-        return self.act_out(y.view(*y.size()[:2]))
+        return self.act_out(y.mean(0).view(y.size(1), -1).mean(-1))

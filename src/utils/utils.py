@@ -1,5 +1,5 @@
 import math
-from random import randint
+import random
 
 import torch
 import numpy as np
@@ -30,7 +30,7 @@ def create_rgb(sens, hsi):
     # hsi:  bxcxhxw
     # rgb:  bx3xhxw
     b, c, h, w = hsi.size()
-    return torch.matmul(sens.transpose(-1, -2), hsi.view(b, c, -1)).view(b, c, h, w)
+    return torch.matmul(sens.transpose(-1, -2), hsi.view(b, c, -1)).view(b, 3, h, w)
 
     
 def construct(blocks, N):
@@ -39,7 +39,7 @@ def construct(blocks, N):
 
 
 def deconstruct(x, N):
-    blocks = torch.stack(torch.chunk(rgb, N, dim=-2), dim=1)
+    blocks = torch.stack(torch.chunk(x, N, dim=-2), dim=1)
     return torch.cat(torch.chunk(blocks, N, dim=-1), dim=1)
 
 
@@ -48,16 +48,16 @@ def deconstruct(x, N):
 def create_sensitivity(sens_type, idx=None):
     if sens_type == 'D':
         if idx is None:
-            idx = randint(0, constants.SENS_NUM-1)
+            idx = random.randint(0, constants.SENS_NUM-1)
         else:
             idx = int(idx)
         f = loadmat(constants.SENS_FILE)
         f = f['sensitivities']
-        sens = f['sens'+str(idx)]
-        return torch.from_numpy(sens[0,0]), idx
+        sens = f['sens'+str(idx+1)]
+        return torch.from_numpy(sens[0,0]).float(), idx
     elif sens_type == 'C':
         ## Note that this was hard-coded for 31-band case!
-        return torch.from_numpy(_create_sens_mixture())
+        return torch.from_numpy(_create_sens_mixture()).float()
     else:
         raise NotImplementedError("bad sensitivity type")
 
@@ -83,10 +83,10 @@ def _create_sens_gaussian():
 
 
 def _create_sens_mixture():
-    k= randint(1,5)
+    k= random.randint(1,5)
     r = [random.random() for i in range(0,k)]
     r = r/np.sum(r)
     sens = np.zeros([31,3])
     for i in range(k):
-        sens = sens+ r[i]*create_sens_gaussian() 
+        sens = sens+ r[i]*_create_sens_gaussian() 
     return sens

@@ -8,13 +8,12 @@ class SmoothLoss(nn.Module):
     def __init__(self):
         super().__init__()
     
-    def forward(self, x):
-        n_chns = x.size(1)
+    def forward(self, x, n_chns):
         a = torch.ones(n_chns)*2
         b = torch.ones(n_chns-1)*-1
         A = self._tridiag(b, a, b)
         A[0,:] = 0
-        return torch.sum(torch.square(torch.matmul(A.to(x.device), x)))
+        return torch.sum(torch.pow(torch.matmul(A.to(x.device), x), 2))
 
     @staticmethod
     def _tridiag(a, b, c, k1=-1, k2=0, k3=1):

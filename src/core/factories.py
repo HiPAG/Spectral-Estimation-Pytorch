@@ -1,7 +1,7 @@
 from functools import wraps
 from inspect import isfunction, isgeneratorfunction, getmembers
 from collections.abc import Iterable
-from itertools import chain
+from itertools import chain, zip_longest
 from importlib import import_module
 
 import torch
@@ -53,7 +53,7 @@ class Duck(tuple):
     __ducktype__ = object
     def __new__(cls, *args):
         if any(not isinstance(a, cls.__ducktype__) for a in args):
-            raise TypeError("please check the input type")
+            raise TypeError("please check the input type.")
         return tuple.__new__(cls, args)
 
 
@@ -109,7 +109,7 @@ def single_model_factory(model_name, C):
         # Give an extra num_resblocks
         return model(C.num_feats_in, C.num_feats_out, C.num_resblocks)
     else:
-        raise NotImplementedError('cannot determine arguments for {}'.format(model_name.strip()))
+        raise NotImplementedError('cannot determine arguments for {}.'.format(model_name.strip()))
 
 
 def single_optim_factory(optim_name, params, C):
@@ -123,7 +123,7 @@ def single_optim_factory(optim_name, params, C):
             weight_decay=C.weight_decay
         )
     else:
-        raise NotImplementedError("{} is not a supported optimizer type".format(optim_name))
+        raise NotImplementedError("{} is not a supported optimizer type.".format(optim_name))
 
 
 def single_critn_factory(critn_name, C):
@@ -140,31 +140,14 @@ def single_critn_factory(critn_name, C):
         }[critn_name.upper()]
         return criterion(*params)
     except KeyError:
-        raise NotImplementedError("{} is not a supported criterion type".format(critn_name))
+        raise NotImplementedError("{} is not a supported criterion type.".format(critn_name))
 
 
 def _get_basic_configs(ds_name, C):
-    if ds_name == 'BSDS500':
+    if ds_name == 'NTIRE2020':
         return dict(
-            root = constants.IMDB_BSDS500,
-            n_seg_cats = C.max_num_cats
-        )
-    elif ds_name == 'DFC2019':
-        return dict(
-            root = constants.IMDB_DFC2019,
-            json_dir = constants.IMDB_DFC2019_JSON
-        )
-    elif ds_name == 'OSCD':
-        return dict(
-            root = constants.IMDB_OSCD
-        )
-    elif ds_name.startswith('AC'):
-        return dict(
-            root = constants.IMDB_AIRCHANGE
-        )
-    elif ds_name.startswith('Lebedev'):
-        return dict(
-            root = constants.IMDB_LEBEDEV
+            root = constants.IMDB_COBET_PLAN_ALPHA,
+            track = C.track
         )
     else:
         return dict()
@@ -174,46 +157,17 @@ def single_train_ds_factory(ds_name, C):
     ds_name = ds_name.strip()
     module = _import_module('data', ds_name)
     dataset = getattr(module, ds_name+'Dataset')
-    if C.task == 'seg':
-        configs = dict(
-            phase='train', 
-            transforms=(Compose(Scale([1.0, 2.0]), Crop(C.crop_size), Flip()), None, None),
-            repeats=C.repeats
-        )
-    else:
-        configs = dict(
-            phase='train', 
-            transforms=(Compose(Crop(C.crop_size), Flip()), None, None),
-            repeats=C.repeats
-        )
+    configs = dict(
+        phase='train', 
+        transforms=(Compose(Crop(C.crop_size)), None, None),
+        repeats=C.repeats
+    )
 
     # Update some common configurations
     configs.update(_get_basic_configs(ds_name, C))
 
     # Set phase-specific ones
-    if ds_name == 'BSDS500':
-        configs.update(
-            dict(
-                sub_id = C.sub_id
-            )
-        )
-    elif ds_name == 'Lebedev':
-        _tf = (
-            Choose(
-                HorizontalFlip(True), VerticalFlip(True), 
-                Rotate('90'), Rotate('180'), Rotate('270'),
-                Scale([1.0, 3.0]),
-                Shift()
-            )
-        )
-        configs.update(
-            dict(
-                transforms=(Compose(_tf, Crop(C.crop_size)), None, None),
-                subsets=('real',)
-            )
-        )
-    else:
-        pass
+    pass
 
     dataset_obj = dataset(**configs)
 
@@ -239,20 +193,7 @@ def single_val_ds_factory(ds_name, C):
     configs.update(_get_basic_configs(ds_name, C))
 
     # Set phase-specific ones
-    if ds_name == 'BSDS500':
-        configs.update(
-            dict(
-                sub_id = 0  # Fix sub_id during val phase
-            )
-        )
-    elif ds_name == 'Lebedev':
-        configs.update(
-            dict(
-                subsets=('real',)
-            )
-        )
-    else:
-        pass
+    pass
 
     dataset_obj = dataset(**configs)  
 
@@ -282,7 +223,7 @@ def optim_factory(optim_names, models, C):
     name_list = _parse_input_names(optim_names)
     num_models = len(models) if isinstance(models, DuckModel) else 1
     if len(name_list) != num_models:
-        raise ValueError("the number of optimizers does not match the number of models")
+        raise ValueError("the number of optimizers does not match the number of models.")
     
     if num_models > 1:
         optims = []
@@ -320,7 +261,10 @@ def data_factory(dataset_names, phase, C):
 def metric_factory(metric_names, C):
     from utils import metrics
     name_list = _parse_input_names(metric_names)
-    return [getattr(metrics, name.strip())() for name in name_list]
+    configs = C.metric_configs
+    if len(name_list) < len(configs):
+        raise RuntimeError('the number of metric names and mismatch the configurations.')
+    return [getattr(metrics, name.strip())(**config) for name, config in zip_longest(name_list, configs, fillvalue={})]
 
 
 if __name__ == '__main__':

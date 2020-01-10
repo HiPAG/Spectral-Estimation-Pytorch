@@ -84,5 +84,5 @@ class MRAE(AverageMeter):
     __name__ = 'MRAE'
     def __init__(self):
         super().__init__(None)
-    def compute(self, actual, predicted):
+    def compute(self, predicted, actual):
         return np.mean(np.abs(_relative_error(actual, predicted, None)))

@@ -23,12 +23,17 @@ def read_config(config_path):
 
 
 def parse_config(cfg_name, cfg):
+    # Note that no type check is yet done here!
     # Parse the name of config file
     sp = cfg_name.split('.')[0].split('_')
     if len(sp) >= 2:
         cfg.setdefault('tag', sp[1])
         cfg.setdefault('suffix', '_'.join(sp[2:]))
     
+    # Parse metric configs
+    if 'metric_configs' in cfg:
+        cfg['metric_configs'] = tuple((dict() if c is None else c) for c in cfg['metric_configs'])
+
     return cfg
 
 
@@ -46,6 +51,8 @@ def parse_args():
                         help='patch size (default: %(default)s)')
     group_data.add_argument('--num-workers', type=int, default=8)
     group_data.add_argument('--repeats', type=int, default=100)
+    # For NTIRE2020
+    group_data.add_argument('--track', type=int, default=1, choices=[1, 2])
 
     # Optimizer
     group_optim = parser.add_argument_group('optimizer')
@@ -70,7 +77,6 @@ def parse_args():
                         help='clear history and start from epoch 0 with the checkpoint loaded')
     group_train.add_argument('--trace-freq', type=int, default=50)
     group_train.add_argument('--device', type=str, default='cpu')
-    group_train.add_argument('--metrics', type=str, default='RMSE+PSNR+SSIM+MRAE')
     group_train.add_argument('--chop', action='store_true')
 
     # Experiment
@@ -87,7 +93,12 @@ def parse_args():
     # Criterion
     group_critn = parser.add_argument_group('criterion related')
     group_critn.add_argument('--criterion', type=str, default='L1')
-    group_critn.add_argument('--ce-weights', type=str, default=(1.0,)*31)
+    group_critn.add_argument('--ce-weights', type=str, default=(1.0,)*40)
+
+    # Metrics
+    group_metric = parser.add_argument_group('metric related')
+    group_metric.add_argument('--metrics', type=str, default='RMSE+PSNR+SSIM+MRAE')
+    group_metric.add_argument('--metric-configs', type=str, nargs='*', default=("{}", "{}", "{}", "{}"))
 
     # Model
     group_model = parser.add_argument_group('model')
@@ -111,6 +122,10 @@ def parse_args():
     if isinstance(args.ce_weights, str):
         args.ce_weights = ast.literal_eval(args.ce_weights)
     args.ce_weights = tuple(args.ce_weights)
+
+    # Handle metric-configs
+    if 'metric_configs' not in cfg:
+        args.metric_configs = tuple(ast.literal_eval(config) for config in args.metric_configs)
 
     return args
 

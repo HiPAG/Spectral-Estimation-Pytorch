@@ -135,3 +135,6 @@ config*.yaml
 
 # Experiment folder
 /exp/
+
+# Script folder
+/src/scripts/

@@ -3,7 +3,8 @@ import torch.nn as nn
 
 
 class BasicConv(nn.Module):
-    def __init__(self, in_ch, out_ch, kernel, bn=False, act=False, **extra)
+    def __init__(self, in_ch, out_ch, kernel, bn=False, act=False, **extra):
+        super().__init__()
         self._seq = nn.Sequential()
         self._seq.add_module('_conv', nn.Conv2d(
             in_ch, out_ch, kernel, 
@@ -12,7 +13,7 @@ class BasicConv(nn.Module):
         if bn:
             self._seq.add_module('_bn', nn.BatchNorm2d(out_ch))
         if act:
-            self._seq.add_module('_act', relu())
+            self._seq.add_module('_act', nn.ReLU(inplace=True))
 
     def forward(self, x):
         return self._seq(x)

@@ -8,7 +8,7 @@ __ENTRANCE__ = 'ResidualHyperInference'
 
 
 class ResBlock(nn.Module):
-    def __init__(n_chns):
+    def __init__(self, n_chns):
         super().__init__()
         self.conv1 = nn.Sequential(
             Conv3x3(n_chns, n_chns),
@@ -24,7 +24,7 @@ class ResBlock(nn.Module):
 
 
 class ResidualHyperInference(nn.Module):
-    def __init__(n_in, n_out, n_resblocks):
+    def __init__(self, n_in, n_out, n_resblocks):
         super().__init__()
         deconv_width = 7
         self.cut = n_resblocks*2 + 2*2 - int(deconv_width/2)
@@ -44,7 +44,7 @@ class ResidualHyperInference(nn.Module):
         )
 
         self.body = nn.Sequential(
-            *[ResBlock() for _ in range(m)]
+            *[ResBlock(d) for _ in range(m)]
         )
 
         self.conv_expand = nn.Sequential(

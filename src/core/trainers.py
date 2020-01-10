@@ -33,8 +33,8 @@ class Trainer:
         self.lr = float(context.lr)
         self.save = context.save_on or context.out_dir
         self.out_dir = context.out_dir
-        self.trace_freq = context.trace_freq
-        self.device = context.device
+        self.trace_freq = int(context.trace_freq)
+        self.device = torch.device(context.device)
         self.suffix_off = context.suffix_off
 
         for k, v in sorted(self.ctx.items()):
@@ -217,6 +217,7 @@ class EstimatorTrainer(Trainer):
         self.model.train()
 
         for i, (rgb, hsi) in enumerate(pb):
+            # RGB in the range [0,255], hsi in the range [0,1]
             # sens for sensitivity and hsi for hyperspectral image
             rgb, hsi = rgb.to(self.device), hsi.to(self.device)
             sens = create_sensitivity('C').to(self.device)
@@ -224,12 +225,13 @@ class EstimatorTrainer(Trainer):
             pred = self.model(rgb)
 
             # Reconstruct RGB from sensitivity function and HSI
+            # The reconstructed RGB in the range [0,1]
             img_pred = create_rgb(pred, hsi)
             img_real = create_rgb(sens, hsi)
 
-            smooth_loss = self.smooth_criterion(pred)
+            smooth_loss = self.smooth_criterion(pred, pred.size(0))
             image_loss = self.image_criterion(img_pred, img_real)
-            label_loss = self.label_criterion(pred, self.make_label(self.batch_size, sens))
+            label_loss = self.label_criterion(pred, sens)
             loss = self.calc_total_loss(image_loss, label_loss, smooth_loss)
             
             losses.update(loss.item(), n=self.batch_size)
@@ -267,16 +269,16 @@ class EstimatorTrainer(Trainer):
         with torch.no_grad():           
             for i, (name, rgb, hsi) in enumerate(pb):
                 rgb, hsi = rgb.to(self.device), hsi.to(self.device)
-                sens = sens_list[i].to(self.device)
+                sens = self.sens_list[i].to(self.device)
 
                 pred = self.model(rgb)
 
                 img_pred = create_rgb(pred, hsi)
                 img_real = create_rgb(sens, hsi)
 
-                smooth_loss = self.smooth_criterion(pred)
+                smooth_loss = self.smooth_criterion(pred, pred.size(0))
                 image_loss = self.image_criterion(img_pred, img_real)
-                label_loss = self.label_criterion(pred, self.make_label(self.batch_size, sens))
+                label_loss = self.label_criterion(pred, sens)
                 loss = self.calc_total_loss(image_loss, label_loss, smooth_loss)
                 
                 losses.update(loss.item(), n=self.batch_size)
@@ -284,14 +286,14 @@ class EstimatorTrainer(Trainer):
                 label_losses.update(label_loss.item(), n=self.batch_size)
                 smooth_losses.update(smooth_loss.item(), n=self.batch_size)
 
-                img_pred = to_array(img_pred[0]).astype('uint8')
-                img_real = to_array(img_real[0]).astype('uint8')
+                img_pred = to_array(img_pred[0])
+                img_real = to_array(img_real[0])
 
                 for m in self.metrics:
                     m.update(img_pred, img_real)
 
                 desc = self.logger.make_desc(
-                    i+1, len_train,
+                    i+1, len_val,
                     ('loss', losses, '.4f'),
                     ('IL', image_losses, '.4f'),
                     ('LL', label_losses, '.4f'),
@@ -306,8 +308,8 @@ class EstimatorTrainer(Trainer):
                 self.logger.dump(desc)
 
                 if store:
-                    self.save_image(self.gpc.add_suffix(name[0], suffix='pred', underline=True), img_pred, epoch)
-                    self.save_image(self.gpc.add_suffix(name[0], suffix='real', underline=True), img_real, epoch)
+                    self.save_image(self.gpc.add_suffix(name[0], suffix='pred', underline=True), (img_pred*255).astype('uint8'), epoch)
+                    self.save_image(self.gpc.add_suffix(name[0], suffix='real', underline=True), (img_real*255).astype('uint8'), epoch)
 
         return self.metrics[0].avg if len(self.metrics) > 0 else max(1.0 - losses.avg, self._init_max_acc)
 
@@ -315,10 +317,6 @@ class EstimatorTrainer(Trainer):
     def calc_total_loss(image_loss, label_loss, smooth_loss):
         # XXX: Weights are fixed here
         return image_loss + 1e-5 * label_loss + 1e-3 * smooth_loss
-
-    @staticmethod
-    def make_label(batch_size, sens):
-        return sens.unsqueeze(0).repeat(batch_size, 1, 1)   # Expand batch dim
 
 
 class ClassifierTrainer(Trainer):
@@ -337,11 +335,11 @@ class ClassifierTrainer(Trainer):
         for i, (rgb, hsi) in enumerate(pb):
             rgb, hsi = rgb.to(self.device), hsi.to(self.device)
             _, idx = create_sensitivity('D')
-            idx = self.make_label(idx, self.batch_size).to(self.device)
+            idx = torch.LongTensor([idx]).to(self.device)
 
             kls = self.model(rgb)
 
-            loss = self.criterion(kls, idx)
+            loss = self.criterion(kls.unsqueeze(0), idx)
             losses.update(loss.item(), n=self.batch_size)
 
             # Compute gradients and do SGD step
@@ -369,26 +367,26 @@ class ClassifierTrainer(Trainer):
             for i, (name, rgb, hsi) in enumerate(pb):
                 rgb, hsi = rgb.to(self.device), hsi.to(self.device)
                 sens, idx = self.sens_list[i]
-                sens, idx = sens.to(self.device), self.make_label(idx, self.batch_size).to(self.device)
+                sens, idx = sens.to(self.device), torch.LongTensor([idx]).to(self.device)
 
                 kls = self.model(rgb)
-                pred, _ = create_sensitivity('D', torch.argmax(kls, dim=1).squeeze().item())
+                pred, _ = create_sensitivity('D', torch.argmax(kls, dim=0).item())
                 pred = pred.to(self.device)
 
                 img_pred = create_rgb(pred, hsi)
                 img_real = create_rgb(sens, hsi)
 
-                loss = self.criterion(kls, idx)
+                loss = self.criterion(kls.unsqueeze(0), idx)
                 losses.update(loss.item(), n=self.batch_size)
 
-                img_pred = to_array(img_pred[0]).astype('uint8')
-                img_real = to_array(img_real[0]).astype('uint8')
+                img_pred = to_array(img_pred[0])
+                img_real = to_array(img_real[0])
 
                 for m in self.metrics:
                     m.update(img_pred, img_real)
 
                 desc = self.logger.make_desc(
-                    i+1, len_train,
+                    i+1, len_val,
                     ('loss', losses, '.4f'),
                     *(
                         (m.__name__, m, '.4f')
@@ -400,14 +398,10 @@ class ClassifierTrainer(Trainer):
                 self.logger.dump(desc)
 
                 if store:
-                    self.save_image(self.gpc.add_suffix(name[0], suffix='pred', underline=True), img_pred, epoch)
-                    self.save_image(self.gpc.add_suffix(name[0], suffix='real', underline=True), img_real, epoch)
+                    self.save_image(self.gpc.add_suffix(name[0], suffix='pred', underline=True), (img_pred*255).astype('uint8'), epoch)
+                    self.save_image(self.gpc.add_suffix(name[0], suffix='real', underline=True), (img_real*255).astype('uint8'), epoch)
 
         return self.metrics[0].avg if len(self.metrics) > 0 else max(1.0 - losses.avg, self._init_max_acc)
-
-    @staticmethod
-    def make_label(batch_size, value):
-        return torch.LongTensor(batch_size, 1).fill_(value)
 
 
 class SolverTrainer(Trainer):
@@ -432,7 +426,7 @@ class SolverTrainer(Trainer):
         for i, (_, hsi) in enumerate(pb):
             hsi = hsi.to(self.device)
 
-            if self.sens_mode == 'D':
+            if self.sens_type == 'D':
                 sens, _ = create_sensitivity('D')
                 sens = sens.to(self.device)
             else:
@@ -476,16 +470,16 @@ class SolverTrainer(Trainer):
             for i, (name, _, hsi) in enumerate(pb):
                 hsi = hsi.to(self.device)
 
-                if self.sens_mode == 'D':
+                if self.sens_type == 'D':
                     sens = self.sens_list[i][0].to(self.device)
                 else:
-                    sens = self.sen_list[i].to(self.device)
+                    sens = self.sens_list[i].to(self.device)
 
                 rgb = create_rgb(sens, hsi)
 
                 if self.with_sens:
                     rgb = torch.cat([rgb, sens.view(1,-1, 1, 1).repeat(rgb.size(0),1,*rgb.shape[2:])], dim=1)
-
+                
                 if self.chop:
                     # Memory-efficient forward
                     N = 2
@@ -503,14 +497,14 @@ class SolverTrainer(Trainer):
                 loss = self.criterion(recon, hsi)
                 losses.update(loss.item(), n=self.batch_size)
 
-                img_pred = to_array(recon[0]).astype('uint8')
-                img_real = to_array(hsi[0]).astype('uint8')
+                img_pred = to_array(recon[0])
+                img_real = to_array(hsi[0])
 
                 for m in self.metrics:
                     m.update(img_pred, img_real)
 
                 desc = self.logger.make_desc(
-                    i+1, len_train,
+                    i+1, len_val,
                     ('loss', losses, '.4f'),
                     *(
                         (m.__name__, m, '.4f')

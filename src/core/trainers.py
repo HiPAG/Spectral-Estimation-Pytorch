@@ -216,18 +216,18 @@ class EstimatorTrainer(Trainer):
         
         self.model.train()
 
-        for i, (rgb, hsi) in enumerate(pb):
-            # RGB in the range [0,255], hsi in the range [0,1]
+        for i, (_, hsi) in enumerate(pb):
             # sens for sensitivity and hsi for hyperspectral image
-            rgb, hsi = rgb.to(self.device), hsi.to(self.device)
+            hsi = hsi.to(self.device)
             sens = create_sensitivity('C').to(self.device)
 
-            pred = self.model(rgb)
+            # The reconstructed RGB in the range [0,1]
+            img_real = create_rgb(sens, hsi)
+
+            pred = self.model(img_real)
 
             # Reconstruct RGB from sensitivity function and HSI
-            # The reconstructed RGB in the range [0,1]
             img_pred = create_rgb(pred, hsi)
-            img_real = create_rgb(sens, hsi)
 
             smooth_loss = self.smooth_criterion(pred, pred.size(0))
             image_loss = self.image_criterion(img_pred, img_real)
@@ -267,14 +267,14 @@ class EstimatorTrainer(Trainer):
         self.model.eval()
 
         with torch.no_grad():           
-            for i, (name, rgb, hsi) in enumerate(pb):
-                rgb, hsi = rgb.to(self.device), hsi.to(self.device)
+            for i, (name, _, hsi) in enumerate(pb):
+                hsi = hsi.to(self.device)
                 sens = self.sens_list[i].to(self.device)
+                img_real = create_rgb(sens, hsi)
 
-                pred = self.model(rgb)
+                pred = self.model(img_real)
 
                 img_pred = create_rgb(pred, hsi)
-                img_real = create_rgb(sens, hsi)
 
                 smooth_loss = self.smooth_criterion(pred, pred.size(0))
                 image_loss = self.image_criterion(img_pred, img_real)
@@ -316,7 +316,8 @@ class EstimatorTrainer(Trainer):
     @staticmethod
     def calc_total_loss(image_loss, label_loss, smooth_loss):
         # XXX: Weights are fixed here
-        return image_loss + 1e-5 * label_loss + 1e-3 * smooth_loss
+        # return image_loss + 1e-5 * label_loss + 1e-3 * smooth_loss
+        return 100*image_loss + 1e-3*label_loss + 1e-1*smooth_loss
 
 
 class ClassifierTrainer(Trainer):
@@ -332,10 +333,11 @@ class ClassifierTrainer(Trainer):
         
         self.model.train()
 
-        for i, (rgb, hsi) in enumerate(pb):
-            rgb, hsi = rgb.to(self.device), hsi.to(self.device)
-            _, idx = create_sensitivity('D')
-            idx = torch.LongTensor([idx]).to(self.device)
+        for i, (_, hsi) in enumerate(pb):
+            hsi = hsi.to(self.device)
+            sens, idx = create_sensitivity('D')
+            sens, idx = sens.to(self.device), torch.LongTensor([idx]).to(self.device)
+            rgb = create_rgb(sens, hsi)
 
             kls = self.model(rgb)
 
@@ -363,18 +365,18 @@ class ClassifierTrainer(Trainer):
 
         self.model.eval()
 
-        with torch.no_grad():           
-            for i, (name, rgb, hsi) in enumerate(pb):
-                rgb, hsi = rgb.to(self.device), hsi.to(self.device)
+        with torch.no_grad():
+            for i, (name, _, hsi) in enumerate(pb):
+                hsi = hsi.to(self.device)
                 sens, idx = self.sens_list[i]
                 sens, idx = sens.to(self.device), torch.LongTensor([idx]).to(self.device)
+                img_real = create_rgb(sens, hsi)
 
-                kls = self.model(rgb)
+                kls = self.model(img_real)
                 pred, _ = create_sensitivity('D', torch.argmax(kls, dim=0).item())
                 pred = pred.to(self.device)
 
                 img_pred = create_rgb(pred, hsi)
-                img_real = create_rgb(sens, hsi)
 
                 loss = self.criterion(kls.unsqueeze(0), idx)
                 losses.update(loss.item(), n=self.batch_size)

@@ -5,3 +5,4 @@
 - [x] Other adaptors and interfaces
 - [ ] Testing codes
 - [x] Store output images
+- [ ] Faster dataloaders

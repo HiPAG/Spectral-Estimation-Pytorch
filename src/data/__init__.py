@@ -45,14 +45,6 @@ class SEDataset(data.Dataset):
         else:
             return (self.get_name(index), *self.preprocess(*data))
 
-        rgb = self.fetch_rgb(self.rgb_list[index])
-        hsi = self.fetch_hsi(self.hsi_list[index])
-        rgb, hsi = self.preprocess(rgb, hsi)
-        if self.phase == 'train':
-            return rgb, hsi
-        else:
-            return basename(self.rgb_list[index]), rgb, hsi
-
     def _set_attributes(self, ctx):
         pass
 
@@ -61,14 +53,6 @@ class SEDataset(data.Dataset):
 
     def _set_mode(self, mode):
         self.mode = mode
-        def _get_name_rgb_only(self, index):
-            return basename(self.rgb_list[index])
-
-        def _get_name_hsi_only(self, index):
-            return basename(self.hsi_list[index])
-
-        def _get_name_rgb_hsi(self, index):
-            return basename(self.rgb_list[index])
 
         def _fetch_rgb_only(self, index):
             return self.fetch_rgb(self.rgb_list[index]), self.PH
@@ -105,18 +89,15 @@ class SEDataset(data.Dataset):
         if mode == 1:
             # RGB only mode
             assert (self.transforms[0] is None) and (self.transforms[2] is None)
-            self.get_name = MethodType(_get_name_rgb_only, self)
             self.fetch = MethodType(_fetch_rgb_only, self)
             self.proprocess = MethodType(_proprocess_rgb_only, self)
         elif mode == 2:
             # HSI only mode
             assert (self.transforms[0] is None) and (self.transforms[1] is None)
-            self.get_name = MethodType(_get_name_hsi_only, self)
             self.fetch = MethodType(_fetch_hsi_only, self)
             self.preprocess = MethodType(_preprocess_hsi_only, self)
         else:
             # RGB and HSI mode
-            self.get_name = MethodType(_get_name_rgb_hsi, self)
             self.fetch = MethodType(_fetch_rgb_hsi, self)         
             self.preprocess = MethodType(_preprocess_rgb_hsi, self)
 
@@ -135,6 +116,9 @@ class SEDataset(data.Dataset):
 
     def fetch_rgb(self, rgb_path):
         return default_loader(rgb_path)
+
+    def get_name(self, index):
+        return basename(self.rgb_list[index])
 
     def preprocess(self, rgb, hsi):
         if self.transforms[0] is not None:

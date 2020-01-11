@@ -12,9 +12,10 @@ class NTIRE2020Dataset(SEDataset):
         root, phase='train', 
         transforms=(None, None, None), 
         repeats=1,
+        mode=3, 
         track=1
     ):
-        super().__init__(root, phase, transforms, repeats)
+        super().__init__(root, phase, transforms, repeats, mode)
 
     def _set_attributes(self, ctx):
         self.track = str(ctx['track'])

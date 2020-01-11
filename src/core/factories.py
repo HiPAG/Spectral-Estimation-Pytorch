@@ -159,8 +159,9 @@ def single_train_ds_factory(ds_name, C):
     dataset = getattr(module, ds_name+'Dataset')
     configs = dict(
         phase='train', 
-        transforms=(Compose(Crop(C.crop_size)), None, None),
-        repeats=C.repeats
+        transforms=(None, None, Compose(Crop(C.crop_size))),
+        repeats=C.repeats,
+        mode=2
     )
 
     # Update some common configurations
@@ -186,7 +187,9 @@ def single_val_ds_factory(ds_name, C):
     dataset = getattr(module, ds_name+'Dataset')
     configs = dict(
         phase='val', 
-        transforms=(None, None, None)
+        transforms=(None, None, None),
+        repeats=1,
+        mode=2
     )
 
     # Update some common configurations

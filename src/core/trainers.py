@@ -317,7 +317,7 @@ class EstimatorTrainer(Trainer):
     def calc_total_loss(image_loss, label_loss, smooth_loss):
         # XXX: Weights are fixed here
         # return image_loss + 1e-5 * label_loss + 1e-3 * smooth_loss
-        return 100*image_loss + 1e-3*label_loss + 1e-1*smooth_loss
+        return 1000*image_loss + label_loss + smooth_loss
 
 
 class ClassifierTrainer(Trainer):

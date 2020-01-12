@@ -28,16 +28,7 @@ class _Desc:
 
 def _func_deco(func_name):
     def _wrapper(self, *args):
-        # TODO: Add key argument support
-        # XXX: This does not look any good
-        try:
-            # Dispatch type 1
-            ret = tuple(getattr(ins, func_name)(*args) for ins in self)
-        except Exception:
-            # Dispatch type 2
-            if len(args) > 1 or (len(args[0]) != len(self)): raise
-            ret = tuple(getattr(i, func_name)(a) for i, a in zip(self, args[0]))
-        return ret
+        return tuple(getattr(ins, func_name)(*args) for ins in self)
     return _wrapper
 
 
@@ -48,12 +39,22 @@ def _generator_deco(func_name):
     return _wrapper
 
 
+def _mark(func):
+    func.__marked__ = True
+    return func
+
+
+def _unmark(func):
+    func.__marked__ = False
+    return func
+
+
 # Duck typing
 class Duck(tuple):
     __ducktype__ = object
     def __new__(cls, *args):
         if any(not isinstance(a, cls.__ducktype__) for a in args):
-            raise TypeError("please check the input type.")
+            raise TypeError("please check the input type")
         return tuple.__new__(cls, args)
 
 
@@ -63,6 +64,9 @@ class DuckMeta(type):
         for k, v in getmembers(bases[0]):
             if k.startswith('__'):
                 continue
+            if k in attrs and hasattr(attrs[k], '__marked__'):
+                if attrs[k].__marked__:
+                    continue
             if isgeneratorfunction(v):
                 attrs[k] = _generator_deco(k)
             elif isfunction(v):
@@ -74,13 +78,47 @@ class DuckMeta(type):
 
 
 class DuckModel(nn.Module, metaclass=DuckMeta):
-    pass
+    SEPA = ':'
+    @_mark
+    def load_state_dict(self, state_dict):
+        dicts = [dict() for _ in range(len(self))]
+        for k, v in state_dict.items():
+            i, *k = k.split(self.SEPA)
+            k = self.SEPA.join(k)
+            i = int(i)
+            dicts[i][k] = v
+        for i in range(len(self)):  self[i].load_state_dict(dicts[i])
+
+    @_mark
+    def state_dict(self):
+        dict_ = dict()
+        for i, ins in enumerate(self):
+            dict_.update({self.SEPA.join([str(i), key]):val for key, val in ins.state_dict().items()})
+        return dict_
 
 
 class DuckOptimizer(torch.optim.Optimizer, metaclass=DuckMeta):
+    SEPA = ':'
     @property
     def param_groups(self):
         return list(chain.from_iterable(ins.param_groups for ins in self))
+
+    @_mark
+    def state_dict(self):
+        dict_ = dict()
+        for i, ins in enumerate(self):
+            dict_.update({self.SEPA.join([str(i), key]):val for key, val in ins.state_dict().items()})
+        return dict_
+
+    @_mark
+    def load_state_dict(self, state_dict):
+        dicts = [dict() for _ in range(len(self))]
+        for k, v in state_dict.items():
+            i, *k = k.split(self.SEPA)
+            k = self.SEPA.join(k)
+            i = int(i)
+            dicts[i][k] = v
+        for i in range(len(self)):  self[i].load_state_dict(dicts[i])
 
 
 class DuckCriterion(nn.Module, metaclass=DuckMeta):

@@ -43,6 +43,10 @@ def parse_args():
     parser.add_argument('cmd', choices=['train', 'val'])
     parser.add_argument('task', choices=['E', 'C', 'S'])
 
+    # tensorboard
+    parser.add_argument('--tensorboard_dir', dtype=str, default=None,
+                        help="if None is given, the default dir will be './runs/CURRENT_DATETIME_HOSTNAME/' ")
+
     # Data
     # Common
     group_data = parser.add_argument_group('data')
@@ -106,6 +110,9 @@ def parse_args():
     group_model.add_argument('--num-resblocks', type=int, default=2)
     group_model.add_argument('--num-feats-in', type=int, default=3)
     group_model.add_argument('--num-feats-out', type=int, default=31)
+
+
+
 
     args = parser.parse_args()
 

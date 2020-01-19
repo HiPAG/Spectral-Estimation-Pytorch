@@ -13,7 +13,7 @@ from utils.misc import R
 from utils.metrics import AverageMeter
 from utils.utils import (create_sensitivity, create_rgb, construct, deconstruct)
 from .factories import (model_factory, optim_factory, critn_factory, data_factory, metric_factory)
-
+from torch.utils.tensorboard import SummaryWriter
 
 class Trainer:
     def __init__(self, model, dataset, criterion, optimizer, settings):
@@ -53,7 +53,9 @@ class Trainer:
         self.start_epoch = 0
         self._init_max_acc = 0.0
 
-    def train_epoch(self):
+
+
+    def train_epoch(self, epoch=0):
         raise NotImplementedError
 
     def validate_epoch(self, epoch=0, store=False):
@@ -67,12 +69,14 @@ class Trainer:
         best_epoch = self.get_ckp_epoch()
 
         for epoch in range(self.start_epoch, self.num_epochs):
+
+
             lr = self._adjust_learning_rate(epoch)
 
             self.logger.show_nl("Epoch: [{0}]\tlr {1:.06f}".format(epoch, lr))
 
             # Train for one epoch
-            self.train_epoch()
+            self.train_epoch(epoch)
 
             # Evaluate the model on validation set
             self.logger.show_nl("Validate")
@@ -206,7 +210,13 @@ class EstimatorTrainer(Trainer):
         self.logger.show_nl("Setting up sensitivity functions for validation")
         self.sens_list = [create_sensitivity('C') for _ in tqdm(range(len(self.val_loader)))]
 
-    def train_epoch(self):
+        # @zjw: tensorboard
+        self.writer = SummaryWriter(log_dir=settings.tensorboard_dir, comment='_Estimator')  # default dir: ./runs/
+
+    def __del__(self):
+        self.writer.close()
+
+    def train_epoch(self, epoch=0):
         losses = AverageMeter()
         smooth_losses = AverageMeter()
         image_losses = AverageMeter()
@@ -254,6 +264,13 @@ class EstimatorTrainer(Trainer):
 
             pb.set_description(desc)
             self.logger.dump(desc)
+
+            #@zjw: tensorboard
+            self.writer.add_scalar('Estimator-Loss/train/total_losses', losses.val, epoch*len_train + i)
+            self.writer.add_scalar('Estimator-Loss/train/image_losses', image_losses.val, epoch*len_train + i)
+            self.writer.add_scalar('Estimator-Loss/train/label_losses', label_losses.val, epoch*len_train + i)
+            self.writer.add_scalar('Estimator-Loss/train/smooth_losses', smooth_losses.val, epoch*len_train + i)
+
 
     def validate_epoch(self, epoch=0, store=False):
         self.logger.show_nl("Epoch: [{0}]".format(epoch))
@@ -307,6 +324,14 @@ class EstimatorTrainer(Trainer):
                 pb.set_description(desc)
                 self.logger.dump(desc)
 
+                #@zjw: tensorboard
+                self.writer.add_scalar('Estimator-Loss/validate/total_losses', losses.val, epoch*len_val + i)
+                self.writer.add_scalar('Estimator-Loss/validate/image_losses', image_losses.val, epoch*len_val + i)
+                self.writer.add_scalar('Estimator-Loss/validate/label_losses', label_losses.val, epoch*len_val + i)
+                self.writer.add_scalar('Estimator-Loss/validate/smooth_losses', smooth_losses.val, epoch*len_val + i)
+                for m in self.metrics:
+                    self.writer.add_scalar('Estimator-validate/metrics/'+m.__name__, m.val, epoch*len_val + i)
+
                 if store:
                     self.save_image(self.gpc.add_suffix(name[0], suffix='pred', underline=True), (img_pred*255).astype('uint8'), epoch)
                     self.save_image(self.gpc.add_suffix(name[0], suffix='real', underline=True), (img_real*255).astype('uint8'), epoch)
@@ -326,7 +351,13 @@ class ClassifierTrainer(Trainer):
         self.logger.show_nl("Setting up sensitivity functions for validation")
         self.sens_list = [create_sensitivity('D') for _ in tqdm(range(len(self.val_loader)))]
 
-    def train_epoch(self):
+        # @zjw: tensorboard
+        self.writer = SummaryWriter(log_dir=settings.tensorboard_dir, comment='_Classifier')  # default dir: ./runs/
+
+    def __del__(self):
+        self.writer.close()
+
+    def train_epoch(self, epoch=0):
         losses = AverageMeter()
         len_train = len(self.train_loader)
         pb = tqdm(self.train_loader)
@@ -356,6 +387,9 @@ class ClassifierTrainer(Trainer):
 
             pb.set_description(desc)
             self.logger.dump(desc)
+
+            #@zjw: tensorboard
+            self.writer.add_scalar('Classifier-Loss/train/losses', losses.val, len_train*epoch + i)
 
     def validate_epoch(self, epoch=0, store=False):
         self.logger.show_nl("Epoch: [{0}]".format(epoch))
@@ -399,6 +433,11 @@ class ClassifierTrainer(Trainer):
                 pb.set_description(desc)
                 self.logger.dump(desc)
 
+                #@zjw: tensorboard
+                self.writer.add_scalar('Classifier-Loss/validate/losses', losses.val, len_val*epoch + i)
+                for m in self.metrics:
+                    self.writer.add_scalar('Classifier-validate/metrics/'+m.__name__, m.val, len_val*epoch + i)
+
                 if store:
                     self.save_image(self.gpc.add_suffix(name[0], suffix='pred', underline=True), (img_pred*255).astype('uint8'), epoch)
                     self.save_image(self.gpc.add_suffix(name[0], suffix='real', underline=True), (img_real*255).astype('uint8'), epoch)
@@ -417,6 +456,12 @@ class SolverTrainer(Trainer):
         self.with_sens = num_feats_in > 3
         self.chop = self.ctx['chop']
         self.cut = self.ctx['num_resblocks']*2+2*2
+
+        # @zjw: tensorboard
+        self.writer = SummaryWriter(log_dir=settings.tensorboard_dir, comment='_Solver')  # default dir: ./runs/
+
+    def __del__(self):
+        self.writer.close()
 
     def train_epoch(self):
         losses = AverageMeter()
@@ -459,6 +504,10 @@ class SolverTrainer(Trainer):
 
             pb.set_description(desc)
             self.logger.dump(desc)
+
+            #@zjw: tensorboard
+            self.writer.add_scalar('Solver-Loss/train/', losses.val, len_train * epoch + i)
+
 
     def validate_epoch(self, epoch=0, store=False):
         self.logger.show_nl("Epoch: [{0}]".format(epoch))
@@ -516,5 +565,10 @@ class SolverTrainer(Trainer):
 
                 pb.set_description(desc)
                 self.logger.dump(desc)
+
+                #@zjw: tensorboard
+                self.writer.add_scalar('Solver-Loss/validate/losses', losses.val, len_val*epoch + i)
+                for m in self.metrics:
+                    self.writer.add_scalar('Solver-validate/metrics/'+m.__name__, m.val, len_val*epoch + i)
 
         return self.metrics[0].avg if len(self.metrics) > 0 else max(1.0 - losses.avg, self._init_max_acc)

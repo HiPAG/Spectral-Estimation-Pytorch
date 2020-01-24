@@ -53,8 +53,6 @@ class Trainer:
         self.start_epoch = 0
         self._init_max_acc = 0.0
 
-
-
     def train_epoch(self, epoch=0):
         raise NotImplementedError
 
@@ -70,7 +68,6 @@ class Trainer:
 
         for epoch in range(self.start_epoch, self.num_epochs):
 
-
             lr = self._adjust_learning_rate(epoch)
 
             self.logger.show_nl("Epoch: [{0}]\tlr {1:.06f}".format(epoch, lr))
@@ -78,6 +75,10 @@ class Trainer:
             # Train for one epoch
             self.train_epoch(epoch)
 
+            # Clear the history of metric objects
+            for m in self.metrics:
+                m.reset()
+                
             # Evaluate the model on validation set
             self.logger.show_nl("Validate")
             acc = self.validate_epoch(epoch=epoch, store=self.save)

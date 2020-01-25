@@ -44,7 +44,7 @@ def parse_args():
     parser.add_argument('task', choices=['E', 'C', 'S'])
 
     # tensorboard
-    parser.add_argument('--tensorboard_dir', dtype=str, default=None,
+    parser.add_argument('--tensorboard_dir', type=str, default=None,
                         help="if None is given, the default dir will be './runs/CURRENT_DATETIME_HOSTNAME/' ")
 
     # Data

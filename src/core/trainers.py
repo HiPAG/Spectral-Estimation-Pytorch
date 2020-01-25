@@ -215,7 +215,7 @@ class EstimatorTrainer(Trainer):
         self.writer = SummaryWriter(log_dir=settings.tensorboard_dir, comment='_Estimator')  # default dir: ./runs/
 
     def __del__(self):
-        self.writer.close()
+        hasattr(self, 'writer') and self.writer.close()
 
     def train_epoch(self, epoch=0):
         losses = AverageMeter()
@@ -356,7 +356,7 @@ class ClassifierTrainer(Trainer):
         self.writer = SummaryWriter(log_dir=settings.tensorboard_dir, comment='_Classifier')  # default dir: ./runs/
 
     def __del__(self):
-        self.writer.close()
+        hasattr(self, 'writer') and self.writer.close()
 
     def train_epoch(self, epoch=0):
         losses = AverageMeter()
@@ -462,7 +462,7 @@ class SolverTrainer(Trainer):
         self.writer = SummaryWriter(log_dir=settings.tensorboard_dir, comment='_Solver')  # default dir: ./runs/
 
     def __del__(self):
-        self.writer.close()
+        hasattr(self, 'writer') and self.writer.close()
 
     def train_epoch(self):
         losses = AverageMeter()

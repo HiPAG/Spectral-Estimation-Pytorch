@@ -78,13 +78,13 @@ class DuckMeta(type):
 
 
 class DuckModel(nn.Module, metaclass=DuckMeta):
-    SEPA = ':'
+    DELIM = ':'
     @_mark
     def load_state_dict(self, state_dict):
         dicts = [dict() for _ in range(len(self))]
         for k, v in state_dict.items():
-            i, *k = k.split(self.SEPA)
-            k = self.SEPA.join(k)
+            i, *k = k.split(self.DELIM)
+            k = self.DELIM.join(k)
             i = int(i)
             dicts[i][k] = v
         for i in range(len(self)):  self[i].load_state_dict(dicts[i])
@@ -93,12 +93,12 @@ class DuckModel(nn.Module, metaclass=DuckMeta):
     def state_dict(self):
         dict_ = dict()
         for i, ins in enumerate(self):
-            dict_.update({self.SEPA.join([str(i), key]):val for key, val in ins.state_dict().items()})
+            dict_.update({self.DELIM.join([str(i), key]):val for key, val in ins.state_dict().items()})
         return dict_
 
 
 class DuckOptimizer(torch.optim.Optimizer, metaclass=DuckMeta):
-    SEPA = ':'
+    DELIM = ':'
     @property
     def param_groups(self):
         return list(chain.from_iterable(ins.param_groups for ins in self))
@@ -107,15 +107,15 @@ class DuckOptimizer(torch.optim.Optimizer, metaclass=DuckMeta):
     def state_dict(self):
         dict_ = dict()
         for i, ins in enumerate(self):
-            dict_.update({self.SEPA.join([str(i), key]):val for key, val in ins.state_dict().items()})
+            dict_.update({self.DELIM.join([str(i), key]):val for key, val in ins.state_dict().items()})
         return dict_
 
     @_mark
     def load_state_dict(self, state_dict):
         dicts = [dict() for _ in range(len(self))]
         for k, v in state_dict.items():
-            i, *k = k.split(self.SEPA)
-            k = self.SEPA.join(k)
+            i, *k = k.split(self.DELIM)
+            k = self.DELIM.join(k)
             i = int(i)
             dicts[i][k] = v
         for i in range(len(self)):  self[i].load_state_dict(dicts[i])

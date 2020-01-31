@@ -50,7 +50,7 @@ def parse_args():
     # Data
     # Common
     group_data = parser.add_argument_group('data')
-    group_data.add_argument('-d', '--dataset', type=str, default='BSDS500')
+    group_data.add_argument('-d', '--dataset', type=str, default='NTIRE2020')
     group_data.add_argument('-p', '--crop-size', type=int, default=256, metavar='P', 
                         help='patch size (default: %(default)s)')
     group_data.add_argument('--num-workers', type=int, default=8)
@@ -111,10 +111,8 @@ def parse_args():
     group_model.add_argument('--num-feats-in', type=int, default=3)
     group_model.add_argument('--num-feats-out', type=int, default=31)
 
-
-
-
     args = parser.parse_args()
+    cfg = None
 
     if exists(args.exp_config):
         cfg = read_config(args.exp_config)
@@ -124,14 +122,13 @@ def parse_args():
         parser.set_defaults(**cfg)  # Reset part of the default values
         args = parser.parse_args()  # Parse again
 
-
     # Handle cross entropy weights
     if isinstance(args.ce_weights, str):
         args.ce_weights = ast.literal_eval(args.ce_weights)
     args.ce_weights = tuple(args.ce_weights)
 
     # Handle metric-configs
-    if 'metric_configs' not in cfg:
+    if not cfg or 'metric_configs' not in cfg:
         args.metric_configs = tuple(ast.literal_eval(config) for config in args.metric_configs)
 
     return args

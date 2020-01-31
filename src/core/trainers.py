@@ -271,6 +271,7 @@ class EstimatorTrainer(Trainer):
             self.writer.add_scalar('Estimator-Loss/train/image_losses', image_losses.val, epoch*len_train + i)
             self.writer.add_scalar('Estimator-Loss/train/label_losses', label_losses.val, epoch*len_train + i)
             self.writer.add_scalar('Estimator-Loss/train/smooth_losses', smooth_losses.val, epoch*len_train + i)
+            self.writer.add_scalar('Estimator-Lr', self.optimizer.param_groups[0]['lr'], epoch*len_train + i)
 
 
     def validate_epoch(self, epoch=0, store=False):
@@ -391,6 +392,7 @@ class ClassifierTrainer(Trainer):
 
             #@zjw: tensorboard
             self.writer.add_scalar('Classifier-Loss/train/losses', losses.val, len_train*epoch + i)
+            self.writer.add_scalar('Classifier-Lr', self.optimizer.param_groups[0]['lr'], epoch * len_train + i)
 
     def validate_epoch(self, epoch=0, store=False):
         self.logger.show_nl("Epoch: [{0}]".format(epoch))
@@ -464,7 +466,7 @@ class SolverTrainer(Trainer):
     def __del__(self):
         hasattr(self, 'writer') and self.writer.close()
 
-    def train_epoch(self):
+    def train_epoch(self, epoch=0):
         losses = AverageMeter()
         len_train = len(self.train_loader)
         pb = tqdm(self.train_loader)
@@ -508,6 +510,7 @@ class SolverTrainer(Trainer):
 
             #@zjw: tensorboard
             self.writer.add_scalar('Solver-Loss/train/', losses.val, len_train * epoch + i)
+            self.writer.add_scalar('Solver-Lr', self.optimizer.param_groups[0]['lr'], epoch * len_train + i)
 
 
     def validate_epoch(self, epoch=0, store=False):

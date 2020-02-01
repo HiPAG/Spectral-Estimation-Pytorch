@@ -16,9 +16,8 @@ from utils.misc import OutPathGetter, Logger, register
 
 
 def read_config(config_path):
-    f = open(config_path, 'r')
-    cfg = yaml.load(f.read(), Loader=yaml.FullLoader)
-    f.close()
+    with open(config_path, 'r') as f:
+        cfg = yaml.load(f.read(), Loader=yaml.FullLoader)
     return cfg or {}
 
 

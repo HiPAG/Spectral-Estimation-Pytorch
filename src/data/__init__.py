@@ -1,4 +1,4 @@
-from os.path import join, expanduser, basename
+from os.path import join, expanduser, basename, exists
 from inspect import currentframe
 from types import MethodType
 
@@ -20,14 +20,14 @@ class SEDataset(data.Dataset):
     ):
         super().__init__()
         self.root = expanduser(root)
+        if not exists(self.root):
+            raise FileNotFoundError
         self.phase = str(phase)
-        self.transforms = transforms
+        self.transforms = list(transforms)
+        self.transforms += [None]*(3-len(self.transforms))
         self.repeats = int(repeats)
+        assert int(mode) in (1, 2, 3)
         self._set_mode(int(mode))
-        assert self.mode in (1, 2, 3)
-        # Get additional arguments from the outer stack frame
-        outer_namespace = {k:v for k, v in currentframe().f_back.f_locals.items() if k not in locals()}
-        self._set_attributes({**outer_namespace, **locals()})   # Hook
         self.rgb_list, self.hsi_list = self._read_file_paths()
         self.len = len(self.rgb_list)
 
@@ -44,9 +44,6 @@ class SEDataset(data.Dataset):
             return self.preprocess(*data)
         else:
             return (self.get_name(index), *self.preprocess(*data))
-
-    def _set_attributes(self, ctx):
-        pass
 
     def _read_file_paths(self):
         raise NotImplementedError

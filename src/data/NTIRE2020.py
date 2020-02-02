@@ -15,10 +15,8 @@ class NTIRE2020Dataset(SEDataset):
         mode=3, 
         track=1
     ):
+        self.track = str(track)
         super().__init__(root, phase, transforms, repeats, mode)
-
-    def _set_attributes(self, ctx):
-        self.track = str(ctx['track'])
 
     def _read_file_paths(self):
         with open(join(self.root, getattr(self, 'JSON_PATTERN'+self.track).format(self.phase)), 'r') as f:

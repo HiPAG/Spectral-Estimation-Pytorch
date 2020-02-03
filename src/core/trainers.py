@@ -4,6 +4,7 @@ from types import MappingProxyType
 from copy import deepcopy
 
 import torch
+import torchvision
 from skimage import io
 from tqdm import tqdm
 
@@ -15,6 +16,7 @@ from utils.utils import (create_sensitivity, create_rgb, construct, deconstruct)
 from .factories import (model_factory, optim_factory, critn_factory, data_factory, metric_factory)
 from torch.utils.tensorboard import SummaryWriter
 
+
 class Trainer:
     def __init__(self, model, dataset, criterion, optimizer, settings):
         super().__init__()
@@ -23,12 +25,12 @@ class Trainer:
         self.phase = context.cmd
 
         self.logger = R['LOGGER']
-        self.gpc = R['GPC']     # Global Path Controller
+        self.gpc = R['GPC']  # Global Path Controller
         self.path = self.gpc.get_path
 
         self.batch_size = context.batch_size
         self.checkpoint = context.resume
-        self.load_checkpoint = (len(self.checkpoint)>0)
+        self.load_checkpoint = (len(self.checkpoint) > 0)
         self.num_epochs = context.num_epochs
         self.lr = float(context.lr)
         self.save = context.save_on or context.out_dir
@@ -38,7 +40,7 @@ class Trainer:
         self.suffix_off = context.suffix_off
 
         for k, v in sorted(self.ctx.items()):
-            self.logger.show("{}: {}".format(k,v))
+            self.logger.show("{}: {}".format(k, v))
 
         self.model = model_factory(model, context)
         self.model.to(self.device)
@@ -49,7 +51,7 @@ class Trainer:
 
         self.train_loader = data_factory(dataset, 'train', context)
         self.val_loader = data_factory(dataset, 'val', context)
-        
+
         self.start_epoch = 0
         self._init_max_acc = 0.0
 
@@ -78,23 +80,23 @@ class Trainer:
             # Clear the history of metric objects
             for m in self.metrics:
                 m.reset()
-                
+
             # Evaluate the model on validation set
             self.logger.show_nl("Validate")
             acc = self.validate_epoch(epoch=epoch, store=self.save)
-            
+
             is_best = acc > max_acc
             if is_best:
                 max_acc = acc
                 best_epoch = epoch
             self.logger.show_nl("Current: {:.6f} ({:03d})\tBest: {:.6f} ({:03d})\t".format(
-                                acc, epoch, max_acc, best_epoch))
+                acc, epoch, max_acc, best_epoch))
 
             # The checkpoint saves next epoch
-            self._save_checkpoint(self.model.state_dict(), self.optimizer.state_dict(), max_acc, epoch+1, is_best)
-        
+            self._save_checkpoint(self.model.state_dict(), self.optimizer.state_dict(), max_acc, epoch + 1, is_best)
+
     def validate(self):
-        if self.checkpoint: 
+        if self.checkpoint:
             if self._resume_from_checkpoint():
                 self.validate_epoch(self.get_ckp_epoch(), self.save)
         else:
@@ -120,14 +122,14 @@ class Trainer:
             return False
 
         self.logger.show("=> loading checkpoint '{}'".format(
-                        self.checkpoint))
+            self.checkpoint))
         checkpoint = torch.load(self.checkpoint)
 
         state_dict = self.model.state_dict()
         ckp_dict = checkpoint.get('state_dict', checkpoint)
-        update_dict = {k:v for k,v in ckp_dict.items() 
-            if k in state_dict and state_dict[k].shape == v.shape}
-        
+        update_dict = {k: v for k, v in ckp_dict.items()
+                       if k in state_dict and state_dict[k].shape == v.shape}
+
         num_to_update = len(update_dict)
         if (num_to_update < len(state_dict)) or (len(state_dict) < len(ckp_dict)):
             if self.phase == 'val' and (num_to_update < len(state_dict)):
@@ -140,7 +142,7 @@ class Trainer:
             else:
                 self.logger.warning("=> {} params are to be loaded".format(num_to_update))
         elif (not self.ctx['anew']) or (self.phase != 'train'):
-            # Note in the non-anew mode, it is not guaranteed that the contained field 
+            # Note in the non-anew mode, it is not guaranteed that the contained field
             # max_acc be the corresponding one of the loaded checkpoint.
             self.start_epoch = checkpoint.get('epoch', self.start_epoch)
             self._init_max_acc = checkpoint.get('max_acc', self._init_max_acc)
@@ -156,38 +158,38 @@ class Trainer:
 
         self.logger.show("=> loaded checkpoint '{}' (epoch {}, max_acc {:.4f})".format(
             self.checkpoint, self.get_ckp_epoch(), self._init_max_acc
-            ))
+        ))
         return True
-        
+
     def _save_checkpoint(self, state_dict, optim_state, max_acc, epoch, is_best):
         state = {
             'epoch': epoch,
             'state_dict': state_dict,
-            'optimizer': optim_state, 
+            'optimizer': optim_state,
             'max_acc': max_acc
-        } 
+        }
         # Save history
         history_path = self.path('weight', constants.CKP_COUNTED.format(e=epoch), underline=True)
         if epoch % self.trace_freq == 0:
             torch.save(state, history_path)
         # Save latest
         latest_path = self.path(
-            'weight', constants.CKP_LATEST, 
+            'weight', constants.CKP_LATEST,
             underline=True
         )
         torch.save(state, latest_path)
         if is_best:
             shutil.copyfile(
                 latest_path, self.path(
-                    'weight', constants.CKP_BEST, 
+                    'weight', constants.CKP_BEST,
                     underline=True
                 )
             )
-    
+
     def get_ckp_epoch(self):
         # Get current epoch of the checkpoint
         # For dismatched ckp or no ckp, set to 0
-        return max(self.start_epoch-1, 0)
+        return max(self.start_epoch - 1, 0)
 
     def save_image(self, file_name, image, epoch):
         file_path = os.path.join(
@@ -203,6 +205,22 @@ class Trainer:
         )
         return io.imsave(out_path, image)
 
+    def save_image_tensor(self, file_name, image, epoch):
+        assert isinstance(image, torch.Tensor), \
+            "The input image(s) must be tensor"
+        file_path = os.path.join(
+            'epoch_{}/'.format(epoch),
+            self.out_dir,
+            file_name
+        )
+        out_path = self.path(
+            'out', file_path,
+            suffix=not self.suffix_off,
+            auto_make=True,
+            underline=True
+        )
+        return torchvision.utils.save_image(image, out_path, padding=0)
+
 
 class EstimatorTrainer(Trainer):
     def __init__(self, dataset, optimizer, settings):
@@ -211,8 +229,8 @@ class EstimatorTrainer(Trainer):
         self.logger.show_nl("Setting up sensitivity functions for validation")
         self.sens_list = [create_sensitivity('C') for _ in tqdm(range(len(self.val_loader)))]
 
-        # @zjw: tensorboard
-        self.writer = SummaryWriter(log_dir=settings.tensorboard_dir, comment='_Estimator')  # default dir: ./runs/
+        # # @zjw: tensorboard
+        # self.writer = SummaryWriter(log_dir=settings.tensorboard_dir, comment='_Estimator')  # default dir: ./runs/
 
     def __del__(self):
         hasattr(self, 'writer') and self.writer.close()
@@ -224,7 +242,7 @@ class EstimatorTrainer(Trainer):
         label_losses = AverageMeter()
         len_train = len(self.train_loader)
         pb = tqdm(self.train_loader)
-        
+
         self.model.train()
 
         for i, (_, hsi) in enumerate(pb):
@@ -244,7 +262,7 @@ class EstimatorTrainer(Trainer):
             image_loss = self.image_criterion(img_pred, img_real)
             label_loss = self.label_criterion(pred, sens)
             loss = self.calc_total_loss(image_loss, label_loss, smooth_loss)
-            
+
             losses.update(loss.item(), n=self.batch_size)
             image_losses.update(image_loss.item(), n=self.batch_size)
             label_losses.update(label_loss.item(), n=self.batch_size)
@@ -256,7 +274,7 @@ class EstimatorTrainer(Trainer):
             self.optimizer.step()
 
             desc = self.logger.make_desc(
-                i+1, len_train,
+                i + 1, len_train,
                 ('loss', losses, '.4f'),
                 ('IL', image_losses, '.4f'),
                 ('LL', label_losses, '.4f'),
@@ -266,13 +284,12 @@ class EstimatorTrainer(Trainer):
             pb.set_description(desc)
             self.logger.dump(desc)
 
-            #@zjw: tensorboard
-            self.writer.add_scalar('Estimator-Loss/train/total_losses', losses.val, epoch*len_train + i)
-            self.writer.add_scalar('Estimator-Loss/train/image_losses', image_losses.val, epoch*len_train + i)
-            self.writer.add_scalar('Estimator-Loss/train/label_losses', label_losses.val, epoch*len_train + i)
-            self.writer.add_scalar('Estimator-Loss/train/smooth_losses', smooth_losses.val, epoch*len_train + i)
-            self.writer.add_scalar('Estimator-Lr', self.optimizer.param_groups[0]['lr'], epoch*len_train + i)
-
+            # @zjw: tensorboard
+            self.logger.add_scalar('Estimator-Loss/train/total_losses', losses.val, epoch * len_train + i)
+            self.logger.add_scalar('Estimator-Loss/train/image_losses', image_losses.val, epoch * len_train + i)
+            self.logger.add_scalar('Estimator-Loss/train/label_losses', label_losses.val, epoch * len_train + i)
+            self.logger.add_scalar('Estimator-Loss/train/smooth_losses', smooth_losses.val, epoch * len_train + i)
+            self.logger.add_scalar('Estimator-Lr', self.optimizer.param_groups[0]['lr'], epoch * len_train + i)
 
     def validate_epoch(self, epoch=0, store=False):
         self.logger.show_nl("Epoch: [{0}]".format(epoch))
@@ -285,7 +302,7 @@ class EstimatorTrainer(Trainer):
 
         self.model.eval()
 
-        with torch.no_grad():           
+        with torch.no_grad():
             for i, (name, _, hsi) in enumerate(pb):
                 hsi = hsi.to(self.device)
                 sens = self.sens_list[i].to(self.device)
@@ -299,20 +316,20 @@ class EstimatorTrainer(Trainer):
                 image_loss = self.image_criterion(img_pred, img_real)
                 label_loss = self.label_criterion(pred, sens)
                 loss = self.calc_total_loss(image_loss, label_loss, smooth_loss)
-                
+
                 losses.update(loss.item(), n=self.batch_size)
                 image_losses.update(image_loss.item(), n=self.batch_size)
                 label_losses.update(label_loss.item(), n=self.batch_size)
                 smooth_losses.update(smooth_loss.item(), n=self.batch_size)
 
-                img_pred = to_array(img_pred[0])
-                img_real = to_array(img_real[0])
+                # img_pred = to_array(img_pred[0])
+                # img_real = to_array(img_real[0])
 
                 for m in self.metrics:
                     m.update(img_pred, img_real)
 
                 desc = self.logger.make_desc(
-                    i+1, len_val,
+                    i + 1, len_val,
                     ('loss', losses, '.4f'),
                     ('IL', image_losses, '.4f'),
                     ('LL', label_losses, '.4f'),
@@ -326,17 +343,21 @@ class EstimatorTrainer(Trainer):
                 pb.set_description(desc)
                 self.logger.dump(desc)
 
-                #@zjw: tensorboard
-                self.writer.add_scalar('Estimator-Loss/validate/total_losses', losses.val, epoch*len_val + i)
-                self.writer.add_scalar('Estimator-Loss/validate/image_losses', image_losses.val, epoch*len_val + i)
-                self.writer.add_scalar('Estimator-Loss/validate/label_losses', label_losses.val, epoch*len_val + i)
-                self.writer.add_scalar('Estimator-Loss/validate/smooth_losses', smooth_losses.val, epoch*len_val + i)
+                # @zjw: tensorboard
+                self.logger.add_scalar('Estimator-Loss/validate/total_losses', losses.val, epoch * len_val + i)
+                self.logger.add_scalar('Estimator-Loss/validate/image_losses', image_losses.val, epoch * len_val + i)
+                self.logger.add_scalar('Estimator-Loss/validate/label_losses', label_losses.val, epoch * len_val + i)
+                self.logger.add_scalar('Estimator-Loss/validate/smooth_losses', smooth_losses.val, epoch * len_val + i)
                 for m in self.metrics:
-                    self.writer.add_scalar('Estimator-validate/metrics/'+m.__name__, m.val, epoch*len_val + i)
+                    self.logger.add_scalar('Estimator-validate/metrics/' + m.__name__, m.val, epoch * len_val + i)
 
                 if store:
-                    self.save_image(self.gpc.add_suffix(name[0], suffix='pred', underline=True), (img_pred*255).astype('uint8'), epoch)
-                    self.save_image(self.gpc.add_suffix(name[0], suffix='real', underline=True), (img_real*255).astype('uint8'), epoch)
+                    self.logger.add_images('Estimator-validate/real-pred', torch.cat((img_real, img_pred), dim=3),
+                                           epoch * len_val + i)
+                    self.save_image_tensor(self.gpc.add_suffix(name[0], suffix='real-pred', underline=True),
+                                    torch.cat((img_real, img_pred), dim=3), epoch)
+                    # self.save_image(self.gpc.add_suffix(name[0], suffix='pred', underline=True), (img_pred*255).astype('uint8'), epoch)
+                    # self.save_image(self.gpc.add_suffix(name[0], suffix='real', underline=True), (img_real*255).astype('uint8'), epoch)
 
         return self.metrics[0].avg if len(self.metrics) > 0 else max(1.0 - losses.avg, self._init_max_acc)
 
@@ -344,7 +365,7 @@ class EstimatorTrainer(Trainer):
     def calc_total_loss(image_loss, label_loss, smooth_loss):
         # XXX: Weights are fixed here
         # return image_loss + 1e-5 * label_loss + 1e-3 * smooth_loss
-        return 1000*image_loss + label_loss + smooth_loss
+        return 1000 * image_loss + label_loss + smooth_loss
 
 
 class ClassifierTrainer(Trainer):
@@ -353,8 +374,8 @@ class ClassifierTrainer(Trainer):
         self.logger.show_nl("Setting up sensitivity functions for validation")
         self.sens_list = [create_sensitivity('D') for _ in tqdm(range(len(self.val_loader)))]
 
-        # @zjw: tensorboard
-        self.writer = SummaryWriter(log_dir=settings.tensorboard_dir, comment='_Classifier')  # default dir: ./runs/
+        # # @zjw: tensorboard
+        # self.writer = SummaryWriter(log_dir=settings.tensorboard_dir, comment='_Classifier')  # default dir: ./runs/
 
     def __del__(self):
         hasattr(self, 'writer') and self.writer.close()
@@ -363,7 +384,7 @@ class ClassifierTrainer(Trainer):
         losses = AverageMeter()
         len_train = len(self.train_loader)
         pb = tqdm(self.train_loader)
-        
+
         self.model.train()
 
         for i, (_, hsi) in enumerate(pb):
@@ -383,16 +404,16 @@ class ClassifierTrainer(Trainer):
             self.optimizer.step()
 
             desc = self.logger.make_desc(
-                i+1, len_train,
+                i + 1, len_train,
                 ('loss', losses, '.4f'),
             )
 
             pb.set_description(desc)
             self.logger.dump(desc)
 
-            #@zjw: tensorboard
-            self.writer.add_scalar('Classifier-Loss/train/losses', losses.val, len_train*epoch + i)
-            self.writer.add_scalar('Classifier-Lr', self.optimizer.param_groups[0]['lr'], epoch * len_train + i)
+            # @zjw: tensorboard
+            self.logger.add_scalar('Classifier-Loss/train/losses', losses.val, len_train * epoch + i)
+            self.logger.add_scalar('Classifier-Lr', self.optimizer.param_groups[0]['lr'], epoch * len_train + i)
 
     def validate_epoch(self, epoch=0, store=False):
         self.logger.show_nl("Epoch: [{0}]".format(epoch))
@@ -418,14 +439,14 @@ class ClassifierTrainer(Trainer):
                 loss = self.criterion(kls.unsqueeze(0), idx)
                 losses.update(loss.item(), n=self.batch_size)
 
-                img_pred = to_array(img_pred[0])
-                img_real = to_array(img_real[0])
+                # img_pred = to_array(img_pred[0])
+                # img_real = to_array(img_real[0])
 
                 for m in self.metrics:
                     m.update(img_pred, img_real)
 
                 desc = self.logger.make_desc(
-                    i+1, len_val,
+                    i + 1, len_val,
                     ('loss', losses, '.4f'),
                     *(
                         (m.__name__, m, '.4f')
@@ -436,14 +457,20 @@ class ClassifierTrainer(Trainer):
                 pb.set_description(desc)
                 self.logger.dump(desc)
 
-                #@zjw: tensorboard
-                self.writer.add_scalar('Classifier-Loss/validate/losses', losses.val, len_val*epoch + i)
+                # @zjw: tensorboard
+                self.logger.add_scalar('Classifier-Loss/validate/losses', losses.val, len_val * epoch + i)
                 for m in self.metrics:
-                    self.writer.add_scalar('Classifier-validate/metrics/'+m.__name__, m.val, len_val*epoch + i)
+                    self.logger.add_scalar('Classifier-validate/metrics/' + m.__name__, m.val, len_val * epoch + i)
 
                 if store:
-                    self.save_image(self.gpc.add_suffix(name[0], suffix='pred', underline=True), (img_pred*255).astype('uint8'), epoch)
-                    self.save_image(self.gpc.add_suffix(name[0], suffix='real', underline=True), (img_real*255).astype('uint8'), epoch)
+                    self.logger.add_images('Classifier-validate/real-pred', torch.cat((img_real, img_pred), dim=3),
+                                           epoch * len_val + i)
+                    self.save_image_tensor(self.gpc.add_suffix(name[0], suffix='real-pred', underline=True),
+                                    torch.cat((img_real, img_pred), dim=3), epoch)
+                    # self.save_image(self.gpc.add_suffix(name[0], suffix='pred', underline=True),
+                    #                 (img_pred * 255).astype('uint8'), epoch)
+                    # self.save_image(self.gpc.add_suffix(name[0], suffix='real', underline=True),
+                    #                 (img_real * 255).astype('uint8'), epoch)
 
         return self.metrics[0].avg if len(self.metrics) > 0 else max(1.0 - losses.avg, self._init_max_acc)
 
@@ -453,15 +480,15 @@ class SolverTrainer(Trainer):
         super().__init__('residual_hyper_inference', dataset, 'MSE', optimizer, settings)
         self.sens_type = self.ctx['sens_type']
         num_feats_in = self.ctx['num_feats_in']
-        assert num_feats_in in (3, self.ctx['num_feats_out']*3+3)
+        assert num_feats_in in (3, self.ctx['num_feats_out'] * 3 + 3)
         self.logger.show_nl("Setting up sensitivity functions for validation")
         self.sens_list = [create_sensitivity(self.sens_type) for _ in tqdm(range(len(self.val_loader)))]
         self.with_sens = num_feats_in > 3
         self.chop = self.ctx['chop']
-        self.cut = self.ctx['num_resblocks']*2+2*2
+        self.cut = self.ctx['num_resblocks'] * 2 + 2 * 2
 
-        # @zjw: tensorboard
-        self.writer = SummaryWriter(log_dir=settings.tensorboard_dir, comment='_Solver')  # default dir: ./runs/
+        # # @zjw: tensorboard
+        # self.writer = SummaryWriter(log_dir=settings.tensorboard_dir, comment='_Solver')  # default dir: ./runs/
 
     def __del__(self):
         hasattr(self, 'writer') and self.writer.close()
@@ -470,7 +497,7 @@ class SolverTrainer(Trainer):
         losses = AverageMeter()
         len_train = len(self.train_loader)
         pb = tqdm(self.train_loader)
-        
+
         self.model.train()
 
         for i, (_, hsi) in enumerate(pb):
@@ -486,11 +513,11 @@ class SolverTrainer(Trainer):
             rgb = create_rgb(sens, hsi)
 
             if self.with_sens:
-                rgb = torch.cat([rgb, sens.view(1,-1, 1, 1).repeat(rgb.size(0),1,*rgb.shape[2:])], dim=1)
+                rgb = torch.cat([rgb, sens.view(1, -1, 1, 1).repeat(rgb.size(0), 1, *rgb.shape[2:])], dim=1)
 
             recon = self.model(rgb)
             # Discard the boundary pixels of hsi
-            hsi = hsi[...,self.cut:-self.cut, self.cut:-self.cut]
+            hsi = hsi[..., self.cut:-self.cut, self.cut:-self.cut]
 
             loss = self.criterion(recon, hsi)
             losses.update(loss.item(), n=self.batch_size)
@@ -501,17 +528,16 @@ class SolverTrainer(Trainer):
             self.optimizer.step()
 
             desc = self.logger.make_desc(
-                i+1, len_train,
+                i + 1, len_train,
                 ('loss', losses, '.4f'),
             )
 
             pb.set_description(desc)
             self.logger.dump(desc)
 
-            #@zjw: tensorboard
-            self.writer.add_scalar('Solver-Loss/train/', losses.val, len_train * epoch + i)
-            self.writer.add_scalar('Solver-Lr', self.optimizer.param_groups[0]['lr'], epoch * len_train + i)
-
+            # @zjw: tensorboard
+            self.logger.add_scalar('Solver-Loss/train/', losses.val, len_train * epoch + i)
+            self.logger.add_scalar('Solver-Lr', self.optimizer.param_groups[0]['lr'], epoch * len_train + i)
 
     def validate_epoch(self, epoch=0, store=False):
         self.logger.show_nl("Epoch: [{0}]".format(epoch))
@@ -521,7 +547,7 @@ class SolverTrainer(Trainer):
 
         self.model.eval()
 
-        with torch.no_grad():           
+        with torch.no_grad():
             for i, (name, _, hsi) in enumerate(pb):
                 hsi = hsi.to(self.device)
 
@@ -533,33 +559,35 @@ class SolverTrainer(Trainer):
                 rgb = create_rgb(sens, hsi)
 
                 if self.with_sens:
-                    rgb = torch.cat([rgb, sens.view(1,-1, 1, 1).repeat(rgb.size(0),1,*rgb.shape[2:])], dim=1)
-                
+                    rgb = torch.cat([rgb, sens.view(1, -1, 1, 1).repeat(rgb.size(0), 1, *rgb.shape[2:])], dim=1)
+
                 if self.chop:
                     # Memory-efficient forward
                     N = 2
                     blocks = deconstruct(rgb, N)
-                    recons = torch.stack([self.model(blocks[:,i]) for i in range(N*N)], dim=1)
+                    recons = torch.stack([self.model(blocks[:, i]) for i in range(N * N)], dim=1)
                     recon = construct(recons, N)
 
                     blocks = deconstruct(hsi, N)
-                    blocks = blocks[...,self.cut:-self.cut, self.cut:-self.cut]
+                    blocks = blocks[..., self.cut:-self.cut, self.cut:-self.cut]
                     hsi = construct(blocks, N)
                 else:
                     recon = self.model(rgb)
-                    hsi = hsi[...,self.cut:-self.cut, self.cut:-self.cut]
+                    hsi = hsi[..., self.cut:-self.cut, self.cut:-self.cut]
 
                 loss = self.criterion(recon, hsi)
                 losses.update(loss.item(), n=self.batch_size)
 
-                img_pred = to_array(recon[0])
-                img_real = to_array(hsi[0])
+                # img_pred = to_array(recon[0])
+                # img_real = to_array(hsi[0])
+                img_pred = recon
+                img_real = hsi
 
                 for m in self.metrics:
                     m.update(img_pred, img_real)
 
                 desc = self.logger.make_desc(
-                    i+1, len_val,
+                    i + 1, len_val,
                     ('loss', losses, '.4f'),
                     *(
                         (m.__name__, m, '.4f')
@@ -570,9 +598,9 @@ class SolverTrainer(Trainer):
                 pb.set_description(desc)
                 self.logger.dump(desc)
 
-                #@zjw: tensorboard
-                self.writer.add_scalar('Solver-Loss/validate/losses', losses.val, len_val*epoch + i)
+                # @zjw: tensorboard
+                self.logger.add_scalar('Solver-Loss/validate/losses', losses.val, len_val * epoch + i)
                 for m in self.metrics:
-                    self.writer.add_scalar('Solver-validate/metrics/'+m.__name__, m.val, len_val*epoch + i)
+                    self.logger.add_scalar('Solver-validate/metrics/' + m.__name__, m.val, len_val * epoch + i)
 
         return self.metrics[0].avg if len(self.metrics) > 0 else max(1.0 - losses.avg, self._init_max_acc)

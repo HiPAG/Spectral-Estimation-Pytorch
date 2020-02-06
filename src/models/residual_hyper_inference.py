@@ -74,3 +74,10 @@ class ResidualHyperInference(nn.Module):
         x = self.conv_expand(x)
 
         return self.conv_out(x) + self.upsample(x_)[...,self.cut:-self.cut, self.cut:-self.cut]
+
+
+if __name__ == '__main__':
+    temp = torch.Tensor(2, 96, 256, 256)
+    model = ResidualHyperInference(96, 31, 2)
+    output = model(temp)
+    print(output.shape)

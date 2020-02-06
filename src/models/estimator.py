@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
 
+# from .common import SameConv3x3, SameConv5x5, MaxPool2x2
 from .common import SameConv3x3, SameConv5x5, MaxPool2x2
-
 
 __ENTRANCE__ = 'Estimator'
 
@@ -61,4 +61,11 @@ class Estimator(nn.Module):
 
         c = y.size(1)
         y = y.mean(0).view(c, -1).mean(-1)
-        return y.view(*self.out_shape)
+        return y.view(*self.out_shape)  # (31, 3)
+
+
+if __name__ == '__main__':
+    temp = torch.Tensor(2, 3, 256, 256)
+    model = Estimator(3, 93)
+    output = model(temp)
+    print(output.shape)

@@ -1,9 +1,5 @@
 import torch
 import torch.nn as nn
-import sys
-import os
-# print(os.path.dirname(__file__))
-sys.path.append(os.path.join(os.path.dirname(__file__), 'models'))
 from models.estimator import Estimator
 from models.residual_hyper_inference import ResidualHyperInference
 

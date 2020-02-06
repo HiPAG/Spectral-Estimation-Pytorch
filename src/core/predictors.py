@@ -40,21 +40,21 @@ class Predictor:
         self.logger = Logger(scrn=scrn, log_dir=log_dir, phase='predict')
 
         if mode == 'dataloader':
-            self.predict = partial(self._predict_dataloader, dataloader=None, save_dir=save_dir)
+            self._predict = partial(self._predict_dataloader, dataloader=None, save_dir=save_dir)
         elif mode == 'folder':
             # self.suffix = ['.jpg', '.png', '.bmp', '.gif', '.npy']  # 支持的图像格式
-            self.predict = partial(self._predict_folder, save_dir=save_dir)
+            self._predict = partial(self._predict_folder, save_dir=save_dir)
         elif mode == 'list':
-            self.predict = partial(self._predict_list, save_dir=save_dir)
+            self._predict = partial(self._predict_list, save_dir=save_dir)
         elif mode == 'file':
-            self.predict = partial(self._predict_file, save_dir=save_dir)
+            self._predict = partial(self._predict_file, save_dir=save_dir)
         elif mode == 'data':
-            self.predict = partial(self._predict_data, save_dir=save_dir)
+            self._predict = partial(self._predict_data, save_dir=save_dir)
         else:
             raise NotImplementedError
 
     def __call__(self, *args, **kwargs):
-        return self.predict(*args, **kwargs)
+        return self._predict(*args, **kwargs)
 
 
     def _model_init(self, model):

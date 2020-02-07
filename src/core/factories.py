@@ -310,6 +310,9 @@ def metric_factory(metric_names, C):
 
 if __name__ == '__main__':
     fake_model = DuckModel(nn.Conv2d(3,3,3), nn.Conv2d(3,3,3))
+    temp = torch.Tensor(1,2,3,4)
+    # output = fake_model(temp)
+    print(getmembers(fake_model))
     fake_model.load_state_dict(fake_model.state_dict())
     optim = torch.optim.Adam(fake_model.parameters(), 
                             betas=(0.9,0.999), 
@@ -320,15 +323,15 @@ if __name__ == '__main__':
 
     fake_criterion = DuckCriterion(nn.L1Loss(), nn.CrossEntropyLoss())
 
-    from data.BSDS500 import BSDS500Dataset
-    fake_dataset = DuckDataset(BSDS500Dataset('~/Datasets/BSR/'), BSDS500Dataset('~/Datasets/BSR/'))
-    loader = torch.utils.data.DataLoader(fake_dataset)
-
-    for param_group in fake_optim.param_groups:
-        param_group['lr'] = 0.1
-    
-    fake_criterion.to('cpu')
-    print(fake_model._version)
-    fake_model._version = (0.5, 0.5)
-    print(fake_model._version)
-    fake_model._version = {0.5, 0.9}
+    # from data.BSDS500 import BSDS500Dataset
+    # fake_dataset = DuckDataset(BSDS500Dataset('~/Datasets/BSR/'), BSDS500Dataset('~/Datasets/BSR/'))
+    # loader = torch.utils.data.DataLoader(fake_dataset)
+    #
+    # for param_group in fake_optim.param_groups:
+    #     param_group['lr'] = 0.1
+    #
+    # fake_criterion.to('cpu')
+    # print(fake_model._version)
+    # fake_model._version = (0.5, 0.5)
+    # print(fake_model._version)
+    # fake_model._version = {0.5, 0.9}

@@ -2,7 +2,6 @@ import shutil
 import os
 from types import MappingProxyType
 from copy import deepcopy
-
 import torch
 import torchvision
 from skimage import io
@@ -232,8 +231,8 @@ class EstimatorTrainer(Trainer):
         # # @zjw: tensorboard
         # self.writer = SummaryWriter(log_dir=settings.tensorboard_dir, comment='_Estimator')  # default dir: ./runs/
 
-    def __del__(self):
-        hasattr(self, 'writer') and self.writer.close()
+    # def __del__(self):
+    #     hasattr(self, 'writer') and self.writer.close()
 
     def train_epoch(self, epoch=0):
         losses = AverageMeter()
@@ -377,8 +376,8 @@ class ClassifierTrainer(Trainer):
         # # @zjw: tensorboard
         # self.writer = SummaryWriter(log_dir=settings.tensorboard_dir, comment='_Classifier')  # default dir: ./runs/
 
-    def __del__(self):
-        hasattr(self, 'writer') and self.writer.close()
+    # def __del__(self):
+    #     hasattr(self, 'writer') and self.writer.close()
 
     def train_epoch(self, epoch=0):
         losses = AverageMeter()
@@ -490,8 +489,8 @@ class SolverTrainer(Trainer):
         # # @zjw: tensorboard
         # self.writer = SummaryWriter(log_dir=settings.tensorboard_dir, comment='_Solver')  # default dir: ./runs/
 
-    def __del__(self):
-        hasattr(self, 'writer') and self.writer.close()
+    # def __del__(self):
+    #     hasattr(self, 'writer') and self.writer.close()
 
     def train_epoch(self, epoch=0):
         losses = AverageMeter()

@@ -34,7 +34,7 @@ def to_array(tensor):
         raise NotImplementedError
 
 def normalize(tensor):
-    return tensor / 255.0
+    return tensor.type(torch.float32) / 255.0
 
 def denormalize(tensor):
     return tensor * 255.0

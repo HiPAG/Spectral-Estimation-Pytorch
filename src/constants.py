@@ -3,7 +3,6 @@
 
 # Dataset directories
 # IMDB_COBET_PLAN_ALPHA = '~/Datasets/CoBeT/NTIRE2020'
-
 IMDB_COBET_PLAN_ALPHA = '/home/linmanhui/Datasets/CoBeT/NTIRE2020'
 
 # Checkpoint templates

@@ -65,7 +65,7 @@ def main():
 
     if os.path.exists(args.exp_config):
         cfg = read_config(args.exp_config)
-        print(cfg)
+        # print(cfg)
         cfg = parse_config(os.path.basename(args.exp_config), cfg)
         # Settings from cfg file overwrite those in args
         # Note that the non-default values will not be affected

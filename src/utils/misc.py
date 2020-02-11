@@ -5,6 +5,7 @@ from collections import OrderedDict
 from weakref import proxy
 from torch.utils.tensorboard import SummaryWriter
 
+
 FORMAT_LONG = "[%(asctime)-15s %(funcName)s] %(message)s"
 FORMAT_SHORT = "%(message)s"
 
@@ -18,7 +19,6 @@ class Logger:
         Logger._count += 1
         self._logger.setLevel(logging.DEBUG)
 
-        self._writer = SummaryWriter(log_dir=log_dir, comment='-' + phase if not phase else phase)
 
         if scrn:
             self._scrn_handler = logging.StreamHandler()
@@ -36,6 +36,11 @@ class Logger:
             self._file_handler.setLevel(logging.DEBUG)
             self._file_handler.setFormatter(logging.Formatter(fmt=FORMAT_LONG))
             self._logger.addHandler(self._file_handler)
+
+            self._writer = SummaryWriter(log_dir=os.path.join(log_dir,
+                                            '{}-{:-4d}-{:02d}-{:02d}-{:02d}-{:02d}-{:02d}'.format(
+                                                phase, *localtime()[:6])
+                                            ))
 
 
     def show(self, *args, **kwargs):

@@ -484,7 +484,7 @@ class SolverTrainer(Trainer):
         self.sens_list = [create_sensitivity(self.sens_type) for _ in tqdm(range(len(self.val_loader)))]
         self.with_sens = num_feats_in > 3
         self.chop = self.ctx['chop']
-        self.cut = self.ctx['num_resblocks'] * 2 + 2 * 2
+        # self.cut = self.ctx['num_resblocks'] * 2 + 2 * 2
 
         # # @zjw: tensorboard
         # self.writer = SummaryWriter(log_dir=settings.tensorboard_dir, comment='_Solver')  # default dir: ./runs/
@@ -516,7 +516,7 @@ class SolverTrainer(Trainer):
 
             recon = self.model(rgb)
             # Discard the boundary pixels of hsi
-            hsi = hsi[..., self.cut:-self.cut, self.cut:-self.cut]
+            # hsi = hsi[..., self.cut:-self.cut, self.cut:-self.cut]
 
             loss = self.criterion(recon, hsi)
             losses.update(loss.item(), n=self.batch_size)
@@ -564,26 +564,16 @@ class SolverTrainer(Trainer):
                     # Memory-efficient forward
                     N = 2
                     blocks = deconstruct(rgb, N)
-                    recons = torch.stack([self.model(blocks[:, i]) for i in range(N * N)], dim=1)
+                    recons = self.model(blocks)
                     recon = construct(recons, N)
-
-                    blocks = deconstruct(hsi, N)
-                    blocks = blocks[..., self.cut:-self.cut, self.cut:-self.cut]
-                    hsi = construct(blocks, N)
                 else:
                     recon = self.model(rgb)
-                    hsi = hsi[..., self.cut:-self.cut, self.cut:-self.cut]
 
                 loss = self.criterion(recon, hsi)
                 losses.update(loss.item(), n=self.batch_size)
 
-                # img_pred = to_array(recon[0])
-                # img_real = to_array(hsi[0])
-                img_pred = recon
-                img_real = hsi
-
                 for m in self.metrics:
-                    m.update(img_pred, img_real)
+                    m.update(recon, hsi)
 
                 desc = self.logger.make_desc(
                     i + 1, len_val,

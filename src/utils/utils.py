@@ -34,13 +34,17 @@ def create_rgb(sens, hsi):
 
     
 def construct(blocks, N):
-    blocks = torch.cat(torch.chunk(blocks, N, dim=1), dim=-1)
-    return torch.cat(torch.unbind(blocks, dim=1), dim=-2)
+    blocks = torch.cat(torch.chunk(blocks, N, dim=0), dim=-1)
+    return torch.cat(torch.chunk(blocks, N, dim=0), dim=-2)
+    # blocks = torch.cat(torch.chunk(blocks, N, dim=1), dim=-1)
+    # return torch.cat(torch.unbind(blocks, dim=1), dim=-2)
 
 
 def deconstruct(x, N):
-    blocks = torch.stack(torch.chunk(x, N, dim=-2), dim=1)
-    return torch.cat(torch.chunk(blocks, N, dim=-1), dim=1)
+    blocks = torch.cat(torch.chunk(x, N, dim=-2), dim=0)
+    return torch.cat(torch.chunk(blocks, N, dim=-1), dim=0)
+    # blocks = torch.stack(torch.chunk(x, N, dim=-2), dim=1)
+    # return torch.cat(torch.chunk(blocks, N, dim=-1), dim=1)
 
 
 # These functions below are adapted from 

@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from .common import Conv1x1, Conv3x3, Conv5x5, BasicConv
+from .common import Conv1x1, Conv3x3, Conv5x5, BasicConv, SameConv, SameConv3x3, SameConv5x5
 
 
 __ENTRANCE__ = 'ResidualHyperInference'
@@ -11,16 +11,16 @@ class ResBlock(nn.Module):
     def __init__(self, n_chns):
         super().__init__()
         self.conv1 = nn.Sequential(
-            Conv3x3(n_chns, n_chns),
+            SameConv3x3(n_chns, n_chns),
             nn.PReLU()
         )
         self.conv2 = nn.Sequential(
-            Conv3x3(n_chns, n_chns),
+            SameConv3x3(n_chns, n_chns),
             nn.PReLU()
         )
     
     def forward(self, x):
-        return self.conv2(self.conv1(x)) + x[...,2:-2,2:-2]
+        return self.conv2(self.conv1(x))
 
 
 class ResidualHyperInference(nn.Module):
@@ -34,12 +34,12 @@ class ResidualHyperInference(nn.Module):
         s, d, m = (128, 32, n_resblocks)
 
         self.conv_feature = nn.Sequential(
-            Conv5x5(n_in, s),
+            SameConv5x5(n_in, s),
             nn.PReLU()
         )
 
         self.conv_shrink = nn.Sequential(
-            Conv1x1(s, d), 
+            Conv1x1(s, d),
             nn.PReLU()
         )
 
@@ -52,10 +52,10 @@ class ResidualHyperInference(nn.Module):
             nn.PReLU()
         )
 
-        self.upsample = BasicConv(n_in, n_out, deconv_width)
+        self.upsample = SameConv(n_in, n_out, deconv_width)
 
         self.conv_out = nn.Sequential(
-            Conv5x5(s, n_out),
+            SameConv5x5(s, n_out),
             nn.PReLU()
         )
 
@@ -64,16 +64,24 @@ class ResidualHyperInference(nn.Module):
         # To feature space
         x = self.conv_feature(x)
 
+        x1 = x
+
         # Shrinking
         x = self.conv_shrink(x)
+
+        x2 = x
 
         # Feature mapping
         x = self.body(x)
 
+        x = x + x2
+
         # Expanding
         x = self.conv_expand(x)
 
-        return self.conv_out(x) + self.upsample(x_)[...,self.cut:-self.cut, self.cut:-self.cut]
+        x = x + x1
+
+        return self.conv_out(x) + self.upsample(x_)
 
 
 if __name__ == '__main__':

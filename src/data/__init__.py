@@ -87,7 +87,7 @@ class SEDataset(data.Dataset):
             # RGB only mode
             assert (self.transforms[0] is None) and (self.transforms[2] is None)
             self.fetch = MethodType(_fetch_rgb_only, self)
-            self.proprocess = MethodType(_proprocess_rgb_only, self)
+            self.preprocess = MethodType(_proprocess_rgb_only, self)
         elif mode == 2:
             # HSI only mode
             assert (self.transforms[0] is None) and (self.transforms[1] is None)

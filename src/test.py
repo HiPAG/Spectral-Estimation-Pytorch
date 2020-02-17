@@ -3,11 +3,14 @@ import yaml
 import json
 from core.predictors import Predictor
 from models.conditional import Conditional
+from models.estimator import Estimator
+from models.Onestep import Onestep
 # from models.classifier import Classifier
 # from models.common import BasicConv
 # from models.estimator import Estimator
 import torch
 import os
+from core.factories import model_factory
 
 
 def read_config(config_path):
@@ -36,22 +39,23 @@ def parse_config(cfg_name, cfg):
         cfg['metric_configs'] = tuple((dict() if c is None else c) for c in cfg['metric_configs'])
 
     return cfg
-
-
-def parse_ckp(ckp_list):
-    assert ckp_list
-    ckps = []
-    for ckp in ckp_list:
-        checkpoint = torch.load(ckp)
-        ckp_dict = checkpoint.get('state_dict', checkpoint)
-        ckps.append(ckp_dict)
-
-    return ckps
+#
+#
+# def parse_ckp(ckp_list):
+#     assert ckp_list
+#     ckps = []
+#     for ckp in ckp_list:
+#         checkpoint = torch.load(ckp)
+#         ckp_dict = checkpoint.get('state_dict', checkpoint)
+#         ckps.append(ckp_dict)
+#
+#     return ckps
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('solution', choices=['C', 'G', 'S'], help="C: estimator+solver; G: generic; S: classifier+solver")
+    parser.add_argument('solution', choices=['C', 'G', 'S', 'E', 'O'],
+                        help="C: estimator+solver; G: generic; S: classifier+solver; E: Estimator; O: Onestep")
     parser.add_argument('--exp-config', type=str, default='')
     parser.add_argument('--checkpoints', nargs='+',  help="The path of pre-trained weights for the model")
     parser.add_argument('--json_path', default=None)
@@ -75,16 +79,33 @@ def main():
     print(args)
 
     if args.solution == 'C':
-        model = Conditional(args.num_feats_in, args.num_feats_out, args.num_resblocks)
+        # model = model_factory('Conditional', args)
+        if len(args.checkpoints) == 1:
+            model = Conditional(args.num_feats_in, args.num_feats_out, args.num_resblocks)
+            checkpoint = torch.load(*args.checkpoints)
+            ckp_dict = checkpoint.get('state_dict', checkpoint)
+            model.load_state_dict(ckp_dict)
+        else:
+            model = Conditional(args.num_feats_in, args.num_feats_out, args.num_resblocks, *args.checkpoints)
     elif args.solution == 'G':
         pass
     elif args.solution == 'S':
         pass
+    elif args.solution == 'E':
+        # model = Estimator(args.num_feats_in, args.num_feats_out)
+        if len(args.checkpoints) == 1:
+            model = Estimator(args.num_feats_in, args.num_feats_out)
+            checkpoint = torch.load(*args.checkpoints)
+            ckp_dict = checkpoint.get('state_dict', checkpoint)
+            model.load_state_dict(ckp_dict)
+    elif args.solution == 'O':
+        model = Onestep(args.num_feates_in, args.num_feats_out, args.num_resblocks)
+        checkpoint = torch.load(*args.ckeckpoints)
+        ckp_dict = checkpoint.get('state_dict', checkpoint)
+        model.load_state_dict(ckp_dict)
     else:
         raise NotImplementedError
 
-    ckps = parse_ckp(args.checkpoints)
-    model.load_checkpoint(*ckps)
 
     file_list = read_file_paths(args.json_path)
 

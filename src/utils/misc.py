@@ -20,7 +20,6 @@ class Logger:
         Logger._count += 1
         self._logger.setLevel(logging.DEBUG)
 
-
         if scrn:
             self._scrn_handler = logging.StreamHandler()
             self._scrn_handler.setLevel(logging.INFO)
@@ -28,21 +27,15 @@ class Logger:
             self._logger.addHandler(self._scrn_handler)
 
         if log_dir and phase:
-            self.log_path = os.path.join(log_dir,
-                                         '{}-{:-4d}-{:02d}-{:02d}-{:02d}-{:02d}-{:02d}.log'.format(
-                                             phase, *localtime()[:6]
-                                         ))
+            timestamp = '{}-{:-4d}-{:02d}-{:02d}-{:02d}-{:02d}-{:02d}'.format(phase, *localtime()[:6])
+            self.log_path = os.path.join(log_dir, timestamp+'.log')
             self.show_nl("log into {}\n\n".format(self.log_path))
             self._file_handler = logging.FileHandler(filename=self.log_path)
             self._file_handler.setLevel(logging.DEBUG)
             self._file_handler.setFormatter(logging.Formatter(fmt=FORMAT_LONG))
             self._logger.addHandler(self._file_handler)
 
-            self._writer = SummaryWriter(log_dir=os.path.join(log_dir,
-                                            '{}-{:-4d}-{:02d}-{:02d}-{:02d}-{:02d}-{:02d}'.format(
-                                                phase, *localtime()[:6])
-                                            ))
-
+            self._writer = SummaryWriter(log_dir=os.path.join(log_dir,timestamp))
 
     def show(self, *args, **kwargs):
         return self._logger.info(*args, **kwargs)
@@ -109,7 +102,6 @@ class Logger:
     def close(self):
         return self._writer.close()
 
-
     def _grad_hook(self, grad, name=None, grads=None):
         grads.update({name: grad})
 
@@ -146,16 +138,13 @@ class Logger:
         for (name, grad) in self.grads.items():
             self.add_histogram(tag=name, values=grad, global_step=global_step, *args, **kwargs)
 
-
-
-
     @staticmethod
-    def make_desc(counter, total, *triples):
-        desc = "[{}/{}]".format(counter, total)
+    def make_desc(counter, total, *triples, opt_str=''):
+        desc = "[{}/{}] {}".format(counter, total, opt_str)
         # The three elements of each triple are
         # (name to display, AverageMeter object, formatting string)
         for name, obj, fmt in triples:
-            desc += (" {} {obj.val:" + fmt + "} ({obj.avg:" + fmt + "})").format(name, obj=obj)
+            desc += (" {} {obj.val:"+fmt+"} ({obj.avg:"+fmt+"})").format(name, obj=obj)
         return desc
 
 
@@ -165,12 +154,10 @@ _default_logger = Logger()
 class _WeakAttribute:
     def __get__(self, instance, owner):
         return instance.__dict__[self.name]
-
     def __set__(self, instance, value):
         if value is not None:
             value = proxy(value)
         instance.__dict__[self.name] = value
-
     def __set_name__(self, owner, name):
         self.name = name
 
@@ -179,7 +166,7 @@ class _TreeNode:
     _sep = '/'
     _none = None
 
-    parent = _WeakAttribute()  # To avoid circular reference
+    parent = _WeakAttribute()   # To avoid circular reference
 
     def __init__(self, name, value=None, parent=None, children=None):
         super().__init__()
@@ -191,13 +178,13 @@ class _TreeNode:
             for child in children:
                 self._add_child(child)
         self.path = name
-
+    
     def get_child(self, name, def_val=None):
         return self.children.get(name, def_val)
 
     def set_child(self, name, val=None):
         r"""
-            Set the value of an existing node.
+            Set the value of an existing node. 
             If the node does not exist, return nothing
         """
         child = self.get_child(name)
@@ -262,7 +249,7 @@ class _TreeNode:
     def bfs_tracker(self):
         queue = []
         queue.insert(0, self)
-        while (queue):
+        while(queue):
             curr = queue.pop()
             yield curr
             if curr.is_leaf():
@@ -273,13 +260,13 @@ class _TreeNode:
 
 class _Tree:
     def __init__(
-            self, name, value=None, strc_ele=None,
-            sep=_TreeNode._sep, def_val=_TreeNode._none
+        self, name, value=None, strc_ele=None, 
+        sep=_TreeNode._sep, def_val=_TreeNode._none
     ):
         super().__init__()
         self._sep = sep
         self._def_val = def_val
-
+        
         self.root = _TreeNode(name, value, parent=None, children={})
         if strc_ele is not None:
             assert isinstance(strc_ele, dict)
@@ -294,28 +281,28 @@ class _Tree:
     def get_root(self):
         r""" Get separated root node """
         return _TreeNode(
-            self.root.name, self.root.value,
+            self.root.name, self.root.value, 
             parent=None, children=None
         )
 
     def __repr__(self):
         return self.__dumps__()
-
+        
     def __dumps__(self):
         r""" Dump to string """
         _str = ''
         # DFS
         stack = []
         stack.append((self.root, 0))
-        while (stack):
+        while(stack):
             root, layer = stack.pop()
-            _str += ' ' * layer + '-' + root.__repr__() + '\n'
+            _str += ' '*layer + '-' + root.__repr__() + '\n'
 
             if root.is_leaf():
                 continue
             # Note that the order of the siblings is not retained
             for c in reversed(list(root.children.values())):
-                stack.append((c, layer + 1))
+                stack.append((c, layer+1))
 
         return _str
 
@@ -359,7 +346,8 @@ class _Tree:
 
     def add_node(self, path, val=None):
         if not path.strip():
-            raise ValueError("the path is null.")
+            raise ValueError("the path is null")
+        path = path.strip('/')
         if val is None:
             val = self._def_val
         names = self.parse_path(path)
@@ -377,18 +365,20 @@ class _Tree:
 
     def join(self, *args):
         return self._sep.join(args)
-
-
+        
+        
 class OutPathGetter:
     def __init__(self, root='', log='logs', out='outs', weight='weights', suffix='', **subs):
         super().__init__()
-        self._root = root.rstrip('/')  # Work robustly for multiple ending '/'s
+        self._root = root.rstrip('/')    # Work robustly for multiple ending '/'s
+        if len(self._root) == 0 and len(root) > 0:
+            self._root = '/'    # In case of the system root dir
         self._suffix = suffix
         self._keys = dict(log=log, out=out, weight=weight, **subs)
         self._dir_tree = _Tree(
             self._root, 'root',
-            strc_ele=dict(zip(self._keys.values(), self._keys.keys())),  # 键值翻转
-            sep='/',
+            strc_ele=dict(zip(self._keys.values(), self._keys.keys())),
+            sep='/', 
             def_val=''
         )
 
@@ -398,7 +388,7 @@ class OutPathGetter:
         self.__counter = 0
 
     def __str__(self):
-        return '\n' + self.sub_dirs
+        return '\n'+self.sub_dirs
 
     @property
     def sub_dirs(self):
@@ -419,7 +409,7 @@ class OutPathGetter:
 
     def _add_node(self, key, val, prefix=False):
         if not prefix and key.startswith(self._root):
-            key = key[len(self._root) + 1:]
+            key = key[len(self._root)+1:]
         return self._dir_tree.add_node(key, val)
 
     def update_keys(self, verbose=False):
@@ -427,7 +417,7 @@ class OutPathGetter:
             self._update_key(k, v, prefix=True)
         if verbose:
             _default_logger.show(self._keys)
-
+        
     def update_tree(self, verbose=False):
         self._dir_tree.perform(lambda x: self.make_dir(x.path))
         if verbose:
@@ -443,13 +433,13 @@ class OutPathGetter:
         return self._keys.get(key, '') if key != 'root' else self.root
 
     def get_path(
-            self, key, file,
-            name='', auto_make=False,
-            suffix=True, underline=False
+        self, key, file, 
+        name='', auto_make=False, 
+        suffix=True, underline=False
     ):
         folder = self.get_dir(key)
         if len(folder) < 1:
-            raise KeyError("key not found")
+            raise KeyError("key not found") 
         if suffix:
             path = os.path.join(folder, self.add_suffix(file, underline=underline))
         else:

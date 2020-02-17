@@ -1,8 +1,23 @@
 import random
+import math
 from functools import partial, wraps
 
 import numpy as np
 import cv2
+
+
+__all__ = [
+    'Compose', 'Choose', 
+    'Scale', 'DiscreteScale', 
+    'Flip', 'HorizontalFlip', 'VerticalFlip', 'Rotate', 
+    'Crop', 'MSCrop',
+    'Shift', 'XShift', 'YShift',
+    'HueShift', 'SaturationShift', 'RGBShift', 'RShift', 'GShift', 'BShift',
+    'PCAJitter', 
+    'ContraBrightScale', 'ContrastScale', 'BrightnessScale',
+    'AddGaussNoise'
+]
+
 
 rand = random.random
 randi = random.randint
@@ -11,10 +26,9 @@ uniform = random.uniform
 # gauss = random.gauss
 gauss = random.normalvariate    # This one is thread-safe
 
-# The transformations treat numpy ndarrays only
+# The transformations treat 2-D or 3-D numpy ndarrays only, with the optional 3rd dim as the channel dim
 
 def _istuple(x): return isinstance(x, (tuple, list))
-
 
 class Transform:
     def __init__(self, random_state=False):
@@ -272,8 +286,12 @@ class _ValueTransform(Transform):
         def wrapper(obj, x):
             # # Make a copy
             # x = x.copy()
-            x = tf(obj, np.clip(x, *obj.limit))
-            return np.clip(x, *obj.limit)
+            dtype = x.dtype
+            # The calculations are done with floating type in case of overflow
+            # This is a stupid yet simple way
+            x = tf(obj, np.clip(x.astype(np.float32), *obj.limit))
+            # Convert back to the original type
+            return np.clip(x, *obj.limit).astype(dtype)
         return wrapper
         
 
@@ -304,23 +322,20 @@ class ColorJitter(_ValueTransform):
         self.random_state = rs
         
         def _(x):
-            return x, ()
+            return x
         self.convert_to = _
         self.convert_back = _
     
     @_ValueTransform.keep_range
     def _transform(self, x):
-        # CAUTION! 
-        # Type conversion here
-        x, params = self.convert_to(x)
+        x = self.convert_to(x)
         for i, c in enumerate(self._channel):
-            x[...,c] += self.shift[i]
-            x[...,c] = self._clip(x[...,c])
-        x, _ = self.convert_back(x, *params)
+            x[...,c] = self._clip(x[...,c]+float(self.shift[i]))
+        x = self.convert_back(x)
         return x
         
     def _clip(self, x):
-        return np.clip(x, *self.limit)
+        return x
         
     def _set_rand_param(self):
         if len(self._channel) == 1:
@@ -333,19 +348,21 @@ class HSVShift(ColorJitter):
     def __init__(self, shift, limit):
         super().__init__(shift, limit)
         def _convert_to(x):
-            type_x = x.dtype
             x = x.astype(np.float32)
             # Normalize to [0,1]
             x -= self.limit[0]
             x /= self.limit_range
             x = cv2.cvtColor(x, code=cv2.COLOR_RGB2HSV)
-            return x, (type_x,)
-        def _convert_back(x, type_x):
+            return x
+        def _convert_back(x):
             x = cv2.cvtColor(x.astype(np.float32), code=cv2.COLOR_HSV2RGB)
-            return x.astype(type_x) * self.limit_range + self.limit[0], ()
+            return x * self.limit_range + self.limit[0]
         # Pack conversion methods
         self.convert_to = _convert_to
         self.convert_back = _convert_back
+
+        def _clip(self, x):
+            raise NotImplementedError
         
 
 class HueShift(HSVShift):
@@ -403,7 +420,7 @@ class PCAJitter(_ValueTransform):
         old_shape = x.shape
         x = np.reshape(x, (-1,3), order='F')   # For RGB
         x_mean = np.mean(x, 0)
-        x -= x_mean
+        x = x - x_mean
         cov_x = np.cov(x, rowvar=False)
         eig_vals, eig_vecs = np.linalg.eig(np.mat(cov_x))
         # The eigen vectors are already unit "length"
@@ -425,9 +442,9 @@ class ContraBrightScale(_ValueTransform):
     
     @_ValueTransform.keep_range
     def _transform(self, x):
-        if self.alpha != 1:
+        if not math.isclose(self.alpha, 1.0):
             x *= self.alpha
-        if self.beta != 0:
+        if not math.isclose(self.beta, 0.0):
             x += self.beta*np.mean(x)
         return x
     
@@ -470,12 +487,3 @@ class AddGaussNoise(_AddNoise):
         self.sigma = sigma
     def _set_rand_param(self):
         self.noise_map = np.random.randn(*self._im_shape)*self.sigma + self.mu
-        
-
-def __test():
-    a = np.arange(16).reshape(4,4)
-    print(Choose(YShift(-0.5, circular=False), Rotate('90'))(a))
-    
-    
-if __name__ == '__main__':
-    __test()

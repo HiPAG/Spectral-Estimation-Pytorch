@@ -58,12 +58,13 @@ def main():
                         help="C: estimator+solver; G: generic; S: classifier+solver; E: Estimator; O: Onestep")
     parser.add_argument('--exp-config', type=str, default='')
     parser.add_argument('--checkpoints', nargs='+',  help="The path of pre-trained weights for the model")
-    parser.add_argument('--json_path', default=None)
-    parser.add_argument('--save_dir', help='The directory for saving results')
-    parser.add_argument('--cuda_off', action='store_true', default=False)
-    parser.add_argument('--num_feats_in', default=3)
-    parser.add_argument('--num_feats_out', default=31)
-    parser.add_argument('--num_resblocks', default=2)
+    parser.add_argument('--json-path', default=None)
+    parser.add_argument('--save-dir', help='The directory for saving results')
+    parser.add_argument('--log-dir', type=str, help='The directory to put log files', default=None)
+    parser.add_argument('--cuda-off', action='store_true', default=False)
+    parser.add_argument('--num-feats-in', default=3)
+    parser.add_argument('--num-feats-out', default=31)
+    parser.add_argument('--num-resblocks', default=2)
 
     args = parser.parse_args()
 
@@ -109,7 +110,7 @@ def main():
 
     file_list = read_file_paths(args.json_path)
 
-    predictor = Predictor(model=model, mode='list', cuda_off=args.cuda_off, save_dir=args.save_dir)
+    predictor = Predictor(model=model, mode='list', cuda_off=args.cuda_off, save_dir=args.save_dir, log_dir=args.log_dir)
     predictor(file_list)
 
 

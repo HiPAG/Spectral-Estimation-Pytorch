@@ -130,8 +130,7 @@ class Predictor:
             consume_time.update(su_time, n=1)
 
             # logger
-            description = ("[{}/{}] speed: {time.val:.4f}s({time.avg:.4f}s)".
-                           format(idx+1, len(dataloader.dataset), time=consume_time))
+            description = self.logger.make_desc(idx+1, len(dataloader.dataset), ('speed', consume_time, '.4f'))
             pb.set_description(description)
             self.logger.dump(description)
 
@@ -155,8 +154,7 @@ class Predictor:
             consume_time.update(su_time)
 
             # logger
-            description = ("[{}/{}] speed: {time.val:.4f}s({time.avg:.4f}s)".
-                           format(idx + 1, len(file_list), time=consume_time))
+            description = self.logger.make_desc(idx+1, len(file_list), ('speed', consume_time, '.4f'))
             pb.set_description(description)
             self.logger.dump(description)
 
@@ -179,8 +177,7 @@ class Predictor:
             consume_time.update(su_time, n=1)
 
             # logger
-            description = ("[{}/{}] speed: {time.val:.4f}s({time.avg:.4f}s)".
-                           format(idx + 1, len(file_list), time=consume_time))
+            description = self.logger.make_desc(idx+1, len(file_list), ('speed', consume_time, '.4f'))
             pb.set_description(description)
             self.logger.dump(description)
 

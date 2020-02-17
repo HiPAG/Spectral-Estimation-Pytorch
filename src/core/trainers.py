@@ -15,7 +15,6 @@ from utils.utils import (create_sensitivity, create_rgb, construct, deconstruct)
 from .factories import (model_factory, optim_factory, critn_factory, data_factory, metric_factory)
 
 
-
 class Trainer:
     def __init__(self, model, dataset, criterion, optimizer, settings):
         super().__init__()
@@ -45,11 +44,14 @@ class Trainer:
         self.model.to(self.device)
         self.criterion = critn_factory(criterion, context)
         self.criterion.to(self.device)
-        self.optimizer = optim_factory(optimizer, self.model, context)
         self.metrics = metric_factory(context.metrics, context)
 
-        self.train_loader = data_factory(dataset, 'train', context)
-        self.val_loader = data_factory(dataset, 'val', context)
+        if self.phase == 'train':
+            self.train_loader = data_factory(dataset, 'train', context)
+            self.val_loader = data_factory(dataset, 'val', context)
+            self.optimizer = optim_factory(optimizer, self.model, context)
+        elif self.phase == 'val':
+            self.val_loader = data_factory(dataset, 'val', context)
 
         self.start_epoch = 0
         self._init_max_acc = 0.0
@@ -59,6 +61,18 @@ class Trainer:
 
     def validate_epoch(self, epoch=0, store=False):
         raise NotImplementedError
+
+    def _write_prompt(self):
+        self.logger.dump(input("\nWrite some notes: "))
+
+    def run(self):
+        if self.phase == 'train':
+            self._write_prompt()
+            self.train()
+        elif self.phase =='val':
+            self.evaluate()
+        else:
+            pass
 
     def train(self):
         if self.load_checkpoint:
@@ -468,9 +482,6 @@ class ClassifierTrainer(Trainer):
         return self.metrics[0].avg if len(self.metrics) > 0 else max(1.0 - losses.avg, self._init_max_acc)
 
 
-
-
-
 class SolverTrainer(Trainer):
     def __init__(self, dataset, optimizer, settings):
         super().__init__('residual_hyper_inference', dataset, 'MSE', optimizer, settings)
@@ -678,7 +689,6 @@ class ConditionalTrainer(Trainer):
 
 
         return self.metrics[0].avg if len(self.metrics) > 0 else max(1.0 - losses.avg, self._init_max_acc)
-
 
 
 class OnestepTrainer(Trainer):

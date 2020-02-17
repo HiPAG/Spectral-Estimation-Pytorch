@@ -138,4 +138,6 @@ config*.yaml
 
 # Script folder
 /scripts/
+
+# Tensorboard folder
 /src/runs/

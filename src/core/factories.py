@@ -125,7 +125,7 @@ class DuckCriterion(nn.Module, metaclass=DuckMeta):
     pass
 
 
-class DuckDataset(data.Dataset, metaclass=DuckMeta):
+class DuckDataset(data.DataLoader, metaclass=DuckMeta):
     pass
 
 
@@ -146,6 +146,8 @@ def single_model_factory(model_name, C):
     elif model.__init__.__code__.co_argcount == (1+3):
         # Give an extra num_resblocks
         return model(C.num_feats_in, C.num_feats_out, C.num_resblocks)
+    elif model.__init__.__code__.co_argcount == (1+5):
+        return model(C.num_feats_in, C.num_feats_out, C.num_resblocks, *C.ckps)
     else:
         raise NotImplementedError('cannot determine arguments for {}.'.format(model_name.strip()))
 
@@ -195,11 +197,23 @@ def single_train_ds_factory(ds_name, C):
     ds_name = ds_name.strip()
     module = _import_module('data', ds_name)
     dataset = getattr(module, ds_name+'Dataset')
+
+    if C.mode == 1:
+        # rgb
+        trans_temp = (None,( Compose(Crop(C.crop_size)), None))
+    elif C.mode == 2:
+        # hsi
+        trans_temp = (None, None, (Compose(Crop(C.crop_size))))
+    else:
+        # rgb and hsi
+        trans_temp = ((Compose(Crop(C.crop_size))), None, None)
+
     configs = dict(
         phase='train', 
-        transforms=(None, None, Compose(Crop(C.crop_size))),
+        transforms=trans_temp,
+        # transforms=(Compose(Crop(C.crop_size)), None, None)),
         repeats=C.repeats,
-        mode=2
+        mode=C.mode
     )
 
     # Update some common configurations
@@ -227,7 +241,7 @@ def single_val_ds_factory(ds_name, C):
         phase='val', 
         transforms=(None, None, None),
         repeats=1,
-        mode=2
+        mode=C.mode
     )
 
     # Update some common configurations

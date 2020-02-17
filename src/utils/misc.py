@@ -4,7 +4,8 @@ from time import localtime
 from collections import OrderedDict
 from weakref import proxy
 from torch.utils.tensorboard import SummaryWriter
-
+import torch.nn as nn
+import functools
 
 FORMAT_LONG = "[%(asctime)-15s %(funcName)s] %(message)s"
 FORMAT_SHORT = "%(message)s"
@@ -107,6 +108,43 @@ class Logger:
 
     def close(self):
         return self._writer.close()
+
+
+    def _grad_hook(self, grad, name=None, grads=None):
+        grads.update({name: grad})
+
+    def watch_grad(self, model, layers):
+        """
+        Add hooks to the specific layers. Gradients of these layers will save to self.grads
+        :param model:
+        :param layers: Except a list eg. layers=[0, -1] means to watch the gradients of
+                        the fist layer and the last layer of the model
+        :return:
+        """
+        assert layers
+        if not hasattr(self, 'grads'):
+            self.grads = {}
+            self.grad_hooks = {}
+        named_parameters = list(model.named_parameters())
+        for layer in layers:
+            name = named_parameters[layer][0]
+            handle = named_parameters[layer][1].register_hook(
+                functools.partial(self._grad_hook, name=name, grads=self.grads))
+            self.grad_hooks.update(dict(name=handle))
+
+    def watch_grad_close(self):
+        for _, handle in self.grad_hooks.items():
+            handle.remove() # remove the hook
+
+    def add_grads(self, global_step=None, *args, **kwargs):
+        """
+        Add gradients to tensorboard. You must call the method self.watch_grad before using this method!
+        """
+        assert  hasattr(self, 'grads'),\
+        "self.grads is nonexisent! You must call self.watch_grad before!"
+        assert self.grads, "self.grads if empty!"
+        for (name, grad) in self.grads.items():
+            self.add_histogram(tag=name, values=grad, global_step=global_step, *args, **kwargs)
 
 
 

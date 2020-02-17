@@ -13,7 +13,7 @@ from utils.misc import R
 from utils.metrics import AverageMeter
 from utils.utils import (create_sensitivity, create_rgb, construct, deconstruct)
 from .factories import (model_factory, optim_factory, critn_factory, data_factory, metric_factory)
-from torch.utils.tensorboard import SummaryWriter
+
 
 
 class Trainer:
@@ -373,12 +373,6 @@ class ClassifierTrainer(Trainer):
         self.logger.show_nl("Setting up sensitivity functions for validation")
         self.sens_list = [create_sensitivity('D') for _ in tqdm(range(len(self.val_loader)))]
 
-        # # @zjw: tensorboard
-        # self.writer = SummaryWriter(log_dir=settings.tensorboard_dir, comment='_Classifier')  # default dir: ./runs/
-
-    # def __del__(self):
-    #     hasattr(self, 'writer') and self.writer.close()
-
     def train_epoch(self, epoch=0):
         losses = AverageMeter()
         len_train = len(self.train_loader)
@@ -474,6 +468,9 @@ class ClassifierTrainer(Trainer):
         return self.metrics[0].avg if len(self.metrics) > 0 else max(1.0 - losses.avg, self._init_max_acc)
 
 
+
+
+
 class SolverTrainer(Trainer):
     def __init__(self, dataset, optimizer, settings):
         super().__init__('residual_hyper_inference', dataset, 'MSE', optimizer, settings)
@@ -484,13 +481,7 @@ class SolverTrainer(Trainer):
         self.sens_list = [create_sensitivity(self.sens_type) for _ in tqdm(range(len(self.val_loader)))]
         self.with_sens = num_feats_in > 3
         self.chop = self.ctx['chop']
-        # self.cut = self.ctx['num_resblocks'] * 2 + 2 * 2
 
-        # # @zjw: tensorboard
-        # self.writer = SummaryWriter(log_dir=settings.tensorboard_dir, comment='_Solver')  # default dir: ./runs/
-
-    # def __del__(self):
-    #     hasattr(self, 'writer') and self.writer.close()
 
     def train_epoch(self, epoch=0):
         losses = AverageMeter()
@@ -498,6 +489,7 @@ class SolverTrainer(Trainer):
         pb = tqdm(self.train_loader)
 
         self.model.train()
+        self.logger.watch_grad(model=self.model, layers=[0, 1, -1])
 
         for i, (_, hsi) in enumerate(pb):
             hsi = hsi.to(self.device)
@@ -535,6 +527,7 @@ class SolverTrainer(Trainer):
             self.logger.dump(desc)
 
             # @zjw: tensorboard
+            self.logger.add_grads(global_step=len_train * epoch + i)
             self.logger.add_scalar('Solver-Loss/train/', losses.val, len_train * epoch + i)
             self.logger.add_scalar('Solver-Lr', self.optimizer.param_groups[0]['lr'], epoch * len_train + i)
 
@@ -591,5 +584,191 @@ class SolverTrainer(Trainer):
                 self.logger.add_scalar('Solver-Loss/validate/losses', losses.val, len_val * epoch + i)
                 for m in self.metrics:
                     self.logger.add_scalar('Solver-validate/metrics/' + m.__name__, m.val, len_val * epoch + i)
+
+        return self.metrics[0].avg if len(self.metrics) > 0 else max(1.0 - losses.avg, self._init_max_acc)
+
+class ConditionalTrainer(Trainer):
+    def __init__(self, dataset, optimizer, settings):
+        super().__init__('conditional', dataset, 'MSE', optimizer, settings)
+        # num_feats_in = self.ctx['num_feats_in']
+        # assert num_feats_in in (3, self.ctx['num_feats_out'] * 3 + 3)
+        # self.logger.show_nl("Setting up sensitivity functions for validation")
+        # self.sens_list = [create_sensitivity(self.sens_type) for _ in tqdm(range(len(self.val_loader)))]
+        # self.with_sens = num_feats_in > 3
+        self.chop = self.ctx['chop']
+
+
+    def train_epoch(self, epoch=0):
+        losses = AverageMeter()
+        len_train = len(self.train_loader)
+        pb = tqdm(self.train_loader)
+
+        self.model.train()
+
+        for i, (rgb, hsi) in enumerate(pb):
+            hsi = hsi.to(self.device)
+            rgb = rgb.to(self.device)
+
+            recon = self.model(rgb)
+
+            loss = self.criterion(recon, hsi)
+            losses.update(loss.item(), n=self.batch_size)
+
+            # Compute gradients and do SGD step
+            self.optimizer.zero_grad()
+            loss.backward()
+            self.optimizer.step()
+
+            desc = self.logger.make_desc(
+                i + 1, len_train,
+                ('loss', losses, '.4f'),
+            )
+
+            pb.set_description(desc)
+            self.logger.dump(desc)
+
+            # @zjw: tensorboard
+            self.logger.add_scalar('Solver-Loss/train/', losses.val, len_train * epoch + i)
+            self.logger.add_scalar('Solver-Lr', self.optimizer.param_groups[0]['lr'], epoch * len_train + i)
+
+    def validate_epoch(self, epoch=0, store=False):
+        self.logger.show_nl("Epoch: [{0}]".format(epoch))
+        losses = AverageMeter()
+        len_val = len(self.val_loader)
+        pb = tqdm(self.val_loader)
+
+        self.model.eval()
+
+        with torch.no_grad():
+            for i, (name, rgb, hsi) in enumerate(pb):
+                hsi = hsi.to(self.device)
+                rgb = rgb.to(self.device)
+
+                if self.chop:
+                    # Memory-efficient forward
+                    N = 2
+                    blocks = deconstruct(rgb, N)
+                    recons = self.model(blocks)
+                    recon = construct(recons, N)
+                else:
+                    recon = self.model(rgb)
+
+                loss = self.criterion(recon, hsi)
+                losses.update(loss.item(), n=self.batch_size)
+
+                for m in self.metrics:
+                    m.update(recon, hsi)
+
+                desc = self.logger.make_desc(
+                    i + 1, len_val,
+                    ('loss', losses, '.4f'),
+                    *(
+                        (m.__name__, m, '.4f')
+                        for m in self.metrics
+                    )
+                )
+
+                pb.set_description(desc)
+                self.logger.dump(desc)
+
+                # @zjw: tensorboard
+                self.logger.add_scalar('Solver-Loss/validate/losses', losses.val, len_val * epoch + i)
+                for m in self.metrics:
+                    self.logger.add_scalar('Solver-validate/metrics/' + m.__name__, m.val, len_val * epoch + i)
+
+
+        return self.metrics[0].avg if len(self.metrics) > 0 else max(1.0 - losses.avg, self._init_max_acc)
+
+
+
+class OnestepTrainer(Trainer):
+    def __init__(self, dataset, optimizer, settings):
+        super().__init__('Onestep', dataset, 'MSE', optimizer, settings)
+        # num_feats_in = self.ctx['num_feats_in']
+        # assert num_feats_in in (3, self.ctx['num_feats_out'] * 3 + 3)
+        # self.logger.show_nl("Setting up sensitivity functions for validation")
+        # self.sens_list = [create_sensitivity(self.sens_type) for _ in tqdm(range(len(self.val_loader)))]
+        # self.with_sens = num_feats_in > 3
+        self.chop = self.ctx['chop']
+
+
+    def train_epoch(self, epoch=0):
+        losses = AverageMeter()
+        len_train = len(self.train_loader)
+        pb = tqdm(self.train_loader)
+
+        self.model.train()
+
+        for i, (rgb, hsi) in enumerate(pb):
+            hsi = hsi.to(self.device)
+            rgb = rgb.to(self.device)
+
+            recon = self.model(rgb)
+
+            loss = self.criterion(recon, hsi)
+            losses.update(loss.item(), n=self.batch_size)
+
+            # Compute gradients and do SGD step
+            self.optimizer.zero_grad()
+            loss.backward()
+            self.optimizer.step()
+
+            desc = self.logger.make_desc(
+                i + 1, len_train,
+                ('loss', losses, '.4f'),
+            )
+
+            pb.set_description(desc)
+            self.logger.dump(desc)
+
+            # @zjw: tensorboard
+            self.logger.add_scalar('Onestep-Loss/train/', losses.val, len_train * epoch + i)
+            self.logger.add_scalar('Onestep-Lr', self.optimizer.param_groups[0]['lr'], epoch * len_train + i)
+
+    def validate_epoch(self, epoch=0, store=False):
+        self.logger.show_nl("Epoch: [{0}]".format(epoch))
+        losses = AverageMeter()
+        len_val = len(self.val_loader)
+        pb = tqdm(self.val_loader)
+
+        self.model.eval()
+
+        with torch.no_grad():
+            for i, (name, rgb, hsi) in enumerate(pb):
+                hsi = hsi.to(self.device)
+                rgb = rgb.to(self.device)
+
+                if self.chop:
+                    # Memory-efficient forward
+                    N = 2
+                    blocks = deconstruct(rgb, N)
+                    recons = self.model(blocks)
+                    recon = construct(recons, N)
+                else:
+                    recon = self.model(rgb)
+
+                loss = self.criterion(recon, hsi)
+                losses.update(loss.item(), n=self.batch_size)
+
+                for m in self.metrics:
+                    m.update(recon, hsi)
+
+                desc = self.logger.make_desc(
+                    i + 1, len_val,
+                    ('loss', losses, '.4f'),
+                    *(
+                        (m.__name__, m, '.4f')
+                        for m in self.metrics
+                    )
+                )
+
+                pb.set_description(desc)
+                self.logger.dump(desc)
+
+                # @zjw: tensorboard
+                self.logger.add_scalar('Onestep-Loss/validate/losses', losses.val, len_val * epoch + i)
+                for m in self.metrics:
+                    self.logger.add_scalar('Onestep-validate/metrics/' + m.__name__, m.val, len_val * epoch + i)
+
 
         return self.metrics[0].avg if len(self.metrics) > 0 else max(1.0 - losses.avg, self._init_max_acc)

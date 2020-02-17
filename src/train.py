@@ -11,7 +11,7 @@ import torch.backends.cudnn as cudnn
 import numpy as np
 import yaml
 
-from core.trainers import EstimatorTrainer, ClassifierTrainer, SolverTrainer
+from core.trainers import EstimatorTrainer, ClassifierTrainer, SolverTrainer, ConditionalTrainer, OnestepTrainer
 from utils.misc import OutPathGetter, Logger, register
 
 
@@ -40,7 +40,7 @@ def parse_args():
     # Training settings
     parser = argparse.ArgumentParser()
     parser.add_argument('cmd', choices=['train', 'val'])
-    parser.add_argument('task', choices=['E', 'C', 'S'])
+    parser.add_argument('task', choices=['E', 'C', 'S', 'O', 'N'])
 
     # tensorboard
     # parser.add_argument('--tensorboard_dir', type=str, default=None,
@@ -54,6 +54,7 @@ def parse_args():
                         help='patch size (default: %(default)s)')
     group_data.add_argument('--num-workers', type=int, default=8)
     group_data.add_argument('--repeats', type=int, default=100)
+    group_data.add_argument('--mode', type=int, choices=[1, 2, 3], default=2)
     # For NTIRE2020
     group_data.add_argument('--track', type=int, default=1, choices=[1, 2])
 
@@ -81,6 +82,8 @@ def parse_args():
     group_train.add_argument('--trace-freq', type=int, default=50)
     group_train.add_argument('--device', type=str, default='cpu')
     group_train.add_argument('--chop', action='store_true')
+    group_train.add_argument('--ckps', nargs='*',
+                             help="The path to pre-trained weights for the joint model. Not for the resume")
 
     # Experiment
     group_exp = parser.add_argument_group('experiment related')
@@ -176,6 +179,10 @@ def main():
             trainer_type = ClassifierTrainer
         elif args.task == 'S':
             trainer_type = SolverTrainer
+        elif args.task == 'O':
+            trainer_type = ConditionalTrainer
+        elif args.task == 'N':
+            trainer_type = OnestepTrainer
         else:
             trainer_type = None
         trainer = trainer_type(args.dataset, args.optimizer, args)

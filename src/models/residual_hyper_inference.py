@@ -33,6 +33,8 @@ class ResidualHyperInference(nn.Module):
         # FSRCNN notation. You can take a look at FSRCNN paper for a deeper explanation
         s, d, m = (128, 32, n_resblocks)
 
+        self.temp = 0
+
         self.conv_feature = nn.Sequential(
             SameConv5x5(n_in, s),
             nn.PReLU()
@@ -80,8 +82,10 @@ class ResidualHyperInference(nn.Module):
         x = self.conv_expand(x)
 
         x = x + x1
+        result = nn.functional.relu(self.conv_out(x) + self.upsample(x_))
 
-        return self.conv_out(x) + self.upsample(x_)
+        return result
+        # return self.conv_out(x) + self.upsample(x_)
 
 
 if __name__ == '__main__':

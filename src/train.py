@@ -186,12 +186,7 @@ def main():
         else:
             trainer_type = None
         trainer = trainer_type(args.dataset, args.optimizer, args)
-        if args.cmd == 'train':
-            trainer.train()
-        elif args.cmd == 'val':
-            trainer.validate()
-        else:
-            pass
+        trainer.run()
     except BaseException as e:
         import traceback
         # Catch ALL kinds of exceptions
